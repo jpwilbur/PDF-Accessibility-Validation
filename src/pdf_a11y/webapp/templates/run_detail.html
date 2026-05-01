@@ -29,17 +29,20 @@
     </div>
   </div>
 
-  {# Hero stat tiles #}
+  {# Hero stat tiles. n_total is URLs submitted; n_done - n_errored is the
+     count of URLs that turned out to be real PDFs and got evaluated. #}
   <div class="stat-grid" style="margin-top:1.25rem;">
     <div class="stat" id="statTotal">
-      <div class="stat-label">PDFs total</div>
+      <div class="stat-label">URLs submitted</div>
       <div class="stat-value" id="statTotalValue">{{ run.n_total }}</div>
-      <div class="stat-sub">in this run</div>
+      <div class="stat-sub">total inputs to this run</div>
     </div>
     <div class="stat success" id="statDone">
-      <div class="stat-label">Evaluated</div>
-      <div class="stat-value" id="statDoneValue">{{ run.n_done }}</div>
-      <div class="stat-sub" id="statDonePct">{{ run.progress_pct }}% complete</div>
+      <div class="stat-label">PDFs evaluated</div>
+      <div class="stat-value" id="statDoneValue">{{ run.n_done - run.n_errored }}</div>
+      <div class="stat-sub" id="statDonePct">
+        {% if run.n_total %}of {{ run.n_total }} URLs were valid PDFs{% else %}—{% endif %}
+      </div>
     </div>
     <div class="stat danger" id="statCrit">
       <div class="stat-label">Critical fails</div>
@@ -47,9 +50,9 @@
       <div class="stat-sub">untagged · scan-only · AT-blocked</div>
     </div>
     <div class="stat warn" id="statErr">
-      <div class="stat-label">Acquisition errors</div>
+      <div class="stat-label">Non-PDF URLs</div>
       <div class="stat-value" id="statErrValue">{{ run.n_errored }}</div>
-      <div class="stat-sub">non-PDF, 4xx/5xx, timeouts</div>
+      <div class="stat-sub">404s, redirects, HTML, timeouts — skipped</div>
     </div>
   </div>
 
@@ -173,8 +176,17 @@
     bar.style.width = pct + '%';
     label.textContent = pct.toFixed(0) + '%';
     if (statTotal && total) statTotal.textContent = total;
-    if (statDone) statDone.textContent = done;
-    if (statDonePct) statDonePct.textContent = pct.toFixed(1) + '% complete';
+    // "PDFs evaluated" excludes acquisition errors — only count URLs that
+    // actually returned a PDF.
+    var evaluated = Math.max(0, (done || 0) - (err || 0));
+    if (statDone) statDone.textContent = evaluated;
+    if (statDonePct) {
+      if (total > 0) {
+        statDonePct.textContent = 'of ' + total + ' URLs were valid PDFs';
+      } else {
+        statDonePct.textContent = '—';
+      }
+    }
     if (statCrit) statCrit.textContent = crit || 0;
     if (statErr)  statErr.textContent  = err || 0;
   }
@@ -253,13 +265,21 @@
       var done = data.n_done || 0;
       var total = data.n_total || 0;
       setProgress(done, total, data.n_critical_failed, data.n_errored);
+      // Acquisition errors don't count as PDFs — skip them from the grade
+      // distribution, the "Last scanned" ticker, and the activity log.
+      // They're already accounted for in the "Non-PDF URLs" stat tile.
+      if (data.last_is_error) return;
       if (data.last_grade && Object.prototype.hasOwnProperty.call(gradeCounts, data.last_grade)) {
         gradeCounts[data.last_grade]++;
         refreshGradeDist();
       }
       updateScanning(data.current_source, data.last_grade, data.last_score_pct);
       var grade = data.last_grade ? 'grade-' + data.last_grade : '';
-      var msg = '[' + done + '/' + total + '] ' + (data.current_source || '');
+      // The activity log counter shows "X / Y" where X is valid PDFs done so
+      // far (excludes acquisition errors), keeping it consistent with the
+      // "PDFs evaluated" stat tile.
+      var validDone = Math.max(0, done - (data.n_errored || 0));
+      var msg = '[' + validDone + '] ' + (data.current_source || '');
       if (data.last_score_pct != null) msg += '  (' + data.last_score_pct.toFixed(1) + '%)';
       appendLog(msg, grade);
     } else if (phase === 'done') {
@@ -267,7 +287,14 @@
       progressBox.classList.add('done'); progressBox.classList.remove('idle','failed');
       setActivePhase('done');
       setProgress(data.n_done, data.n_total, data.n_critical_failed, data.n_errored);
-      nowScanning.innerHTML = '<strong style="color:var(--good);">✓ All ' + (data.n_total || 0) + ' PDFs evaluated.</strong>';
+      var totalIn = data.n_total || 0;
+      var errIn   = data.n_errored || 0;
+      var validIn = Math.max(0, totalIn - errIn);
+      var msg = '✓ ' + validIn + ' PDF' + (validIn === 1 ? '' : 's') + ' evaluated';
+      if (errIn > 0) {
+        msg += ' · ' + errIn + ' URL' + (errIn === 1 ? '' : 's') + ' weren\'t valid PDFs';
+      }
+      nowScanning.innerHTML = '<strong style="color:var(--good);">' + msg + '.</strong>';
       appendLog('Run finished.');
       renderReport();
     } else if (phase === 'failed') {

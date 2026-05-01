@@ -99,9 +99,10 @@ https://example.gov/b.pdf
         <th>Started</th>
         <th>Source</th>
         <th>Status</th>
-        <th>PDFs</th>
+        <th>URLs</th>
+        <th>Valid PDFs</th>
         <th>Critical fails</th>
-        <th>Errors</th>
+        <th>Non-PDF</th>
         <th></th>
       </tr>
     </thead>
@@ -118,7 +119,8 @@ https://example.gov/b.pdf
           {% endif %}
         </td>
         <td><span class="pill pill-{{ run.status }}">{{ run.status }}</span></td>
-        <td>{{ run.n_done }}/{{ run.n_total }}</td>
+        <td>{{ run.n_total }}</td>
+        <td>{{ run.n_done - run.n_errored }}</td>
         <td>{{ run.n_critical_failed }}</td>
         <td>{{ run.n_errored }}</td>
         <td><a href="/runs/{{ run.id }}">open →</a></td>

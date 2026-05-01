@@ -39,12 +39,21 @@ class ProgressEvent:
     phase: str
     """One of: 'starting', 'acquiring', 'evaluating', 'finished'."""
     n_total: int
+    """Total URLs submitted to the pipeline (includes non-PDF acquisition errors)."""
     n_done: int
+    """URLs processed so far. n_evaluated = n_done - n_errored."""
     n_errored: int
+    """Acquisition errors (non-PDF responses, 4xx/5xx, timeouts) — these are
+    NOT counted as evaluated documents and are excluded from grade
+    distributions and activity logs."""
     n_critical_failed: int
     current_source: str | None = None
     last_grade: str | None = None
     last_score_pct: float | None = None
+    last_is_error: bool = False
+    """True when the most recently processed URL was an acquisition error
+    (not a real PDF). UI surfaces should not increment grade distributions
+    or write activity-log entries for these."""
     message: str | None = None
 
 
@@ -120,6 +129,7 @@ class Pipeline:
                 n_errored += 1
             if report.score.critical_fail:
                 n_critical_failed += 1
+            is_error = report.error is not None
             self._emit(
                 ProgressEvent(
                     phase="evaluating",
@@ -128,8 +138,14 @@ class Pipeline:
                     n_errored=n_errored,
                     n_critical_failed=n_critical_failed,
                     current_source=src,
-                    last_grade=report.score.grade,
-                    last_score_pct=report.score.score_pct,
+                    # Acquisition errors get a synthetic grade of "F" from the
+                    # scoring engine because no checks were applicable.
+                    # That number is meaningless to the user — suppress it
+                    # for the live stream so error URLs don't pollute the
+                    # grade distribution.
+                    last_grade=None if is_error else report.score.grade,
+                    last_score_pct=None if is_error else report.score.score_pct,
+                    last_is_error=is_error,
                 )
             )
 
