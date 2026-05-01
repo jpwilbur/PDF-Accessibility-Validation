@@ -6,6 +6,8 @@ Loaded from `weights.yaml` (and overridable via CLI flags).
 from __future__ import annotations
 
 import os
+import shutil
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -64,10 +66,7 @@ class Config:
     @classmethod
     def load(cls, weights_path: Path | None = None) -> Config:
         cfg = cls()
-        # Auto-detect Homebrew openjdk so veraPDF works out of the box on macOS.
-        homebrew_java = Path("/opt/homebrew/opt/openjdk/bin/java")
-        if homebrew_java.exists():
-            cfg.java_home = "/opt/homebrew/opt/openjdk/bin"
+        cfg.java_home = _detect_java_home()
 
         if weights_path and weights_path.exists():
             data = yaml.safe_load(weights_path.read_text()) or {}
@@ -87,6 +86,54 @@ class Config:
         """Prepend java_home to PATH if not already present (for veraPDF subprocess)."""
         if not self.java_home:
             return
+        sep = os.pathsep
         current = os.environ.get("PATH", "")
-        if self.java_home not in current.split(":"):
-            os.environ["PATH"] = f"{self.java_home}:{current}"
+        if self.java_home not in current.split(sep):
+            os.environ["PATH"] = f"{self.java_home}{sep}{current}"
+
+
+def _detect_java_home() -> str | None:
+    """Cross-platform best-effort detection of a Java install for veraPDF.
+
+    Order:
+        1. `java` on PATH already (no shimming needed) → return None.
+        2. JAVA_HOME env var.
+        3. macOS Homebrew openjdk locations (Apple Silicon then Intel).
+        4. Windows: common Adoptium / Eclipse Temurin install dirs.
+
+    Returns the directory that should be prepended to PATH, or None if java
+    is already callable.
+    """
+    if shutil.which("java"):
+        return None
+
+    env_home = os.environ.get("JAVA_HOME")
+    if env_home:
+        candidate = Path(env_home) / "bin"
+        if (candidate / _java_exe_name()).exists():
+            return str(candidate)
+
+    if sys.platform == "darwin":
+        for p in (
+            Path("/opt/homebrew/opt/openjdk/bin"),
+            Path("/usr/local/opt/openjdk/bin"),
+        ):
+            if (p / "java").exists():
+                return str(p)
+    elif sys.platform == "win32":
+        for parent in (
+            Path("C:/Program Files/Eclipse Adoptium"),
+            Path("C:/Program Files/Java"),
+            Path("C:/Program Files (x86)/Java"),
+        ):
+            if not parent.exists():
+                continue
+            for sub in sorted(parent.iterdir(), reverse=True):
+                bin_dir = sub / "bin"
+                if (bin_dir / "java.exe").exists():
+                    return str(bin_dir)
+    return None
+
+
+def _java_exe_name() -> str:
+    return "java.exe" if sys.platform == "win32" else "java"
