@@ -110,6 +110,9 @@ th, td { text-align: left; padding: 0.5rem 0.65rem; border-bottom: 1px solid var
 th { background: #f3f5f8; position: sticky; top: 0; }
 th button { background: transparent; border: 0; font: inherit; font-weight: 700; cursor: pointer; padding: 0; }
 tbody tr:hover { background: #fafbfd; }
+tbody tr.errored-row { background: #fef9ef; }
+tbody tr.errored-row:hover { background: #fdf3dc; }
+tbody tr.errored-row td { color: #7a4a00; }
 
 .toolbar {
   display: flex;

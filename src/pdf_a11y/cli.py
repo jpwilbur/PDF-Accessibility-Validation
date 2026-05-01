@@ -179,7 +179,9 @@ def serve(
 
     web_app = create_app()
     url = f"http://{host}:{port}/"
-    console.print(f"[bold green]pdf-a11y[/bold green] is running at [bold]{url}[/bold]")
+    console.print(
+        f"[bold blue]ObservePoint PDF Validation[/bold blue] is running at [bold]{url}[/bold]"
+    )
     console.print("Press Ctrl+C to stop.")
 
     if not no_open:

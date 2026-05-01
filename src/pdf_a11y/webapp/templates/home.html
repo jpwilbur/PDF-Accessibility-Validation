@@ -1,10 +1,10 @@
 {% extends "_base.html" %}
-{% block title %}pdf-a11y — start a new run{% endblock %}
+{% block title %}New run — ObservePoint PDF Validation{% endblock %}
 
 {% block content %}
 
-<h1>Run a new accessibility evaluation</h1>
-<p class="muted">Either pull URLs from an ObservePoint saved report or paste them in directly. Each PDF is downloaded, evaluated, and scored independently. Non-PDF responses are recorded with an error and don't count toward findings.</p>
+<h1>Validate PDFs for accessibility</h1>
+<p class="muted">Pull URLs from an ObservePoint saved report (or paste them in directly), then watch each PDF run through the full PDF/UA-1 + WCAG 2.1 + Section 508 check battery. Each PDF is scored independently. Non-PDF URLs are recorded as errors and excluded from findings.</p>
 
 <div class="card">
   <div class="tabs" role="tablist">

@@ -39,7 +39,7 @@ def create_app() -> FastAPI:
     templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
 
     app = FastAPI(
-        title="pdf-a11y",
+        title="ObservePoint PDF Validation",
         description="Local PDF accessibility evaluator",
         version=__version__,
     )

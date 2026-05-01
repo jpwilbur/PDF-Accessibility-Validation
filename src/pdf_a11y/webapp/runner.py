@@ -226,10 +226,16 @@ class RunRunner:
             },
         )
 
+        # Per-run cache: PDFs download under the run's own dir and are deleted
+        # at the end so disk doesn't grow unboundedly. The report files
+        # (summary.html, findings.jsonl, etc.) are kept; only the bytes go.
+        cache_dir = output_dir / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
         try:
             config = Config.load()
             config.paths.output_dir = output_dir
-            config.paths.cache_dir = paths.app_data_dir() / "cache"
+            config.paths.cache_dir = cache_dir
             if concurrency is not None:
                 config.network.concurrency = concurrency
 
@@ -276,6 +282,14 @@ class RunRunner:
                 {"phase": "failed", "message": str(e)},
             )
         finally:
+            # Reclaim disk: drop the cached PDF bytes now that the report is built.
+            import shutil as _sh
+
+            try:
+                if cache_dir.exists():
+                    _sh.rmtree(cache_dir)
+            except OSError as e:
+                logger.warning("failed to clean cache for run %s: %s", run_id, e)
             self.bus.finish(run_id)
 
 

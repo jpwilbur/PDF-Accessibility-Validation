@@ -1,12 +1,12 @@
 {% extends "_base.html" %}
-{% block title %}pdf-a11y — run history{% endblock %}
+{% block title %}History — ObservePoint PDF Validation{% endblock %}
 
 {% block content %}
 <h1>Run history</h1>
-<p class="muted">{{ runs|length }} run(s).</p>
+<p class="muted">{{ runs|length }} run(s) on this machine.</p>
 
 {% if runs %}
-<div class="card" style="padding: 0;">
+<div class="card table-card">
   <table id="runsTable">
     <thead>
       <tr>

@@ -3,15 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}pdf-a11y{% endblock %}</title>
+<title>{% block title %}ObservePoint PDF Validation{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 {% block head %}{% endblock %}
 </head>
 <body>
-<nav class="topnav">
-  <div class="brand"><a href="/">pdf-a11y</a></div>
-  <a href="/">Run new</a>
-  <a href="/runs">History</a>
+<nav class="topnav" role="navigation">
+  <a class="brand" href="/">
+    <span class="logo">{% include "_logo.svg" %}</span>
+    <span class="brand-text">
+      <span>ObservePoint</span>
+      <small>PDF Validation</small>
+    </span>
+  </a>
+  <a class="navlink" href="/">New run</a>
+  <a class="navlink" href="/runs">History</a>
   <span class="grow"></span>
   <span class="meta">v{{ app_version }}</span>
 </nav>
@@ -21,7 +31,7 @@
 </main>
 
 <footer>
-  pdf-a11y · evaluate PDFs against PDF/UA-1, Matterhorn, WCAG 2.1, Section 508 · running locally
+  Local app · runs at <a href="https://www.observepoint.com" target="_blank" rel="noopener">observepoint.com</a> · evaluates against PDF/UA-1, Matterhorn, WCAG 2.1, Section 508.
 </footer>
 
 {% block scripts %}{% endblock %}

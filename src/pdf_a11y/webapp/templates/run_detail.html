@@ -1,56 +1,112 @@
 {% extends "_base.html" %}
-{% block title %}pdf-a11y — run {{ run.id }}{% endblock %}
+{% block title %}Run {{ run.id }} — ObservePoint PDF Validation{% endblock %}
 
 {% block content %}
-<h1>
-  Run
-  <span class="pill pill-{{ run.status }}" id="statusPill">{{ run.status }}</span>
-</h1>
-<p class="muted">
-  ID <code>{{ run.id }}</code> · started {{ run.started_at }}
-  {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
-  {% if run.label %} · {{ run.label }}{% endif %}
-</p>
 
-<div class="card">
-  <div class="field-row">
+<div class="card elevated" id="runHero">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
     <div>
-      <label>Source</label>
-      {% if run.source_kind == 'observepoint' %}
-        ObservePoint saved report #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
-      {% else %}
-        {{ run.source_kind }} ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
-      {% endif %}
+      <h1 style="margin-bottom:0.35rem;">
+        Run
+        <span class="pill pill-{{ run.status }}" id="statusPill">{{ run.status }}</span>
+      </h1>
+      <p class="muted" style="margin:0;">
+        {% if run.label %}<strong style="color:var(--fg-soft);">{{ run.label }}</strong> · {% endif %}
+        ID <code>{{ run.id }}</code> · started {{ run.started_at }}
+        {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
+      </p>
     </div>
-    <div>
-      <label>Progress</label>
-      <div class="progress">
-        <div class="bar" id="progressBar" style="width: {{ run.progress_pct }}%;"></div>
-        <div class="label" id="progressLabel">{{ run.n_done }} / {{ run.n_total }} done · {{ run.n_critical_failed }} critical-fail · {{ run.n_errored }} errors</div>
+    <div style="text-align:right;">
+      <div class="muted" style="font-size:0.78em; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Source</div>
+      <div style="font-weight:600; font-size:0.95rem;">
+        {% if run.source_kind == 'observepoint' %}
+          ObservePoint #{{ run.source_meta.report_id }}
+          {% if run.source_meta.report_name %}<br><span class="muted" style="font-weight:400;">{{ run.source_meta.report_name }}</span>{% endif %}
+        {% else %}
+          Manual ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
+        {% endif %}
       </div>
     </div>
   </div>
-  {% if run.error %}
-  <p class="card" style="background: var(--critical-bg); color: var(--critical-fg); border-color: #f5b5b5; margin-top: 1rem;">
-    <strong>Error:</strong> {{ run.error }}
+
+  {# Hero stat tiles #}
+  <div class="stat-grid" style="margin-top:1.25rem;">
+    <div class="stat" id="statTotal">
+      <div class="stat-label">PDFs total</div>
+      <div class="stat-value" id="statTotalValue">{{ run.n_total }}</div>
+      <div class="stat-sub">in this run</div>
+    </div>
+    <div class="stat success" id="statDone">
+      <div class="stat-label">Evaluated</div>
+      <div class="stat-value" id="statDoneValue">{{ run.n_done }}</div>
+      <div class="stat-sub" id="statDonePct">{{ run.progress_pct }}% complete</div>
+    </div>
+    <div class="stat danger" id="statCrit">
+      <div class="stat-label">Critical fails</div>
+      <div class="stat-value" id="statCritValue">{{ run.n_critical_failed }}</div>
+      <div class="stat-sub">untagged · scan-only · AT-blocked</div>
+    </div>
+    <div class="stat warn" id="statErr">
+      <div class="stat-label">Acquisition errors</div>
+      <div class="stat-value" id="statErrValue">{{ run.n_errored }}</div>
+      <div class="stat-sub">non-PDF, 4xx/5xx, timeouts</div>
+    </div>
+  </div>
+
+  {# Phase strip #}
+  <div class="phases" id="phaseStrip" aria-label="Run phases">
+    <span class="phase" data-phase="starting"><span class="dot"></span>Starting</span>
+    <span class="phase" data-phase="acquiring"><span class="dot"></span>Downloading</span>
+    <span class="phase" data-phase="evaluating"><span class="dot"></span>Evaluating</span>
+    <span class="phase" data-phase="done"><span class="dot"></span>Done</span>
+  </div>
+
+  {# Progress bar + currently-scanning #}
+  <div class="progress idle" id="progressBox">
+    <div class="bar" id="progressBar" style="width: {{ run.progress_pct }}%;"></div>
+    <div class="label" id="progressLabel">{{ run.progress_pct }}%</div>
+  </div>
+  <p class="now-scanning" id="nowScanning">
+    {% if run.status == 'done' %}<strong>Run complete.</strong>{% else %}Waiting for first PDF…{% endif %}
   </p>
+
+  {% if run.error %}
+  <div style="margin-top:1rem; padding:0.85rem 1rem; background:var(--bad-bg); color:var(--crit-fg); border:1px solid #FECACA; border-radius:var(--radius-sm); font-size:0.92rem;">
+    <strong>Error:</strong> {{ run.error }}
+  </div>
   {% endif %}
 </div>
 
-<h2>Live activity</h2>
-<div class="event-log" id="eventLog" aria-live="polite"></div>
+<h2>Grade distribution</h2>
+<div class="card flat" style="padding:0.85rem 1rem;">
+  <div class="grade-dist" id="gradeDist">
+    {% for g in ['A','B','C','D','F'] %}
+    <div class="grade-cell {{ g }}" data-grade="{{ g }}">
+      <div class="gletter">{{ g }}</div>
+      <div class="gcount" data-count="0">0</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="muted" style="margin-top:0.5rem; font-size:0.83em;">Updates as each PDF finishes.</div>
+</div>
+
+<h2>Activity</h2>
+<details class="card flat" id="activityCard" {% if run.status != 'done' %}open{% endif %}>
+  <summary style="font-weight:600; cursor:pointer; user-select:none; margin-bottom:0.5rem;">Live activity log</summary>
+  <div class="event-log" id="eventLog" aria-live="polite"></div>
+</details>
 
 {% if summary_exists %}
-<h2 style="margin-top: 1.5rem;">Report</h2>
-<p class="muted">
-  <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener">Open summary in a new tab</a> ·
+<h2 style="margin-top:1.5rem;" id="reportHeading">Report</h2>
+<p class="muted" id="reportLinks">
+  <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener">Open in a new tab</a> ·
   <a href="/runs/{{ run.id }}/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> ·
   <a href="/runs/{{ run.id }}/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>
 </p>
 <iframe class="report" id="reportFrame" src="/runs/{{ run.id }}/report/summary.html" title="Run summary report"></iframe>
 {% else %}
-<div id="reportPlaceholder" class="card muted">
-  Report files will appear here once the run finishes.
+<div id="reportPlaceholder" class="card muted" style="text-align:center; padding:1.5rem;">
+  Report files will appear here when the run finishes.
 </div>
 {% endif %}
 {% endblock %}
@@ -58,28 +114,53 @@
 {% block scripts %}
 <script>
 (function() {
-  var runId = "{{ run.id }}";
+  var runId = {{ run.id | tojson }};
   var statusPill = document.getElementById('statusPill');
   var bar = document.getElementById('progressBar');
+  var progressBox = document.getElementById('progressBox');
   var label = document.getElementById('progressLabel');
   var log = document.getElementById('eventLog');
+  var nowScanning = document.getElementById('nowScanning');
   var placeholder = document.getElementById('reportPlaceholder');
   var existingFrame = document.getElementById('reportFrame');
+  var hasReport = !!existingFrame;
 
-  var lastSummaryAvailable = !!existingFrame;
+  // Stat-tile elements
+  var statTotal = document.getElementById('statTotalValue');
+  var statDone  = document.getElementById('statDoneValue');
+  var statDonePct = document.getElementById('statDonePct');
+  var statCrit  = document.getElementById('statCritValue');
+  var statErr   = document.getElementById('statErrValue');
 
-  function append(line, gradeClass) {
-    var p = document.createElement('p');
-    p.className = 'ev';
-    if (gradeClass) {
-      var g = document.createElement('span');
-      g.className = 'grade ' + gradeClass;
-      g.textContent = gradeClass.split('-')[1] || '';
-      p.appendChild(g);
-    }
-    p.appendChild(document.createTextNode(line));
-    log.appendChild(p);
-    log.scrollTop = log.scrollHeight;
+  // Phase strip
+  var phaseEls = {};
+  document.querySelectorAll('#phaseStrip .phase').forEach(function(el) {
+    phaseEls[el.dataset.phase] = el;
+  });
+  var phaseOrder = ['starting','acquiring','evaluating','done'];
+
+  // Grade distribution counts (kept in sync with the live event stream)
+  var gradeCounts = {A:0, B:0, C:0, D:0, F:0};
+  function refreshGradeDist() {
+    Object.keys(gradeCounts).forEach(function(g) {
+      var cell = document.querySelector('.grade-cell[data-grade="'+g+'"]');
+      if (!cell) return;
+      var n = gradeCounts[g];
+      cell.querySelector('.gcount').textContent = n;
+      if (n > 0) cell.classList.add('has'); else cell.classList.remove('has');
+    });
+  }
+
+  function setActivePhase(phase) {
+    phaseOrder.forEach(function(p) {
+      if (!phaseEls[p]) return;
+      phaseEls[p].classList.remove('active');
+      phaseEls[p].classList.remove('done');
+    });
+    var idx = phaseOrder.indexOf(phase);
+    if (idx < 0) return;
+    for (var i = 0; i < idx; i++) phaseEls[phaseOrder[i]].classList.add('done');
+    phaseEls[phaseOrder[idx]].classList.add('active');
   }
 
   function setStatus(text, kind) {
@@ -88,67 +169,118 @@
   }
 
   function setProgress(done, total, crit, err) {
-    var pct = total > 0 ? Math.round(100 * done / total) : 0;
+    var pct = total > 0 ? (100 * done / total) : 0;
     bar.style.width = pct + '%';
-    label.textContent = done + ' / ' + total + ' done · ' + (crit || 0) + ' critical-fail · ' + (err || 0) + ' errors';
+    label.textContent = pct.toFixed(0) + '%';
+    if (statTotal && total) statTotal.textContent = total;
+    if (statDone) statDone.textContent = done;
+    if (statDonePct) statDonePct.textContent = pct.toFixed(1) + '% complete';
+    if (statCrit) statCrit.textContent = crit || 0;
+    if (statErr)  statErr.textContent  = err || 0;
   }
 
-  function ensureReportLoaded() {
-    if (lastSummaryAvailable) return;
-    lastSummaryAvailable = true;
-    if (placeholder) {
-      var heading = document.createElement('h2');
-      heading.textContent = 'Report';
+  function appendLog(line, gradeClass) {
+    var p = document.createElement('p');
+    p.className = 'ev';
+    if (gradeClass) {
+      var g = document.createElement('span');
+      g.className = 'grade ' + gradeClass;
+      g.textContent = (gradeClass.split('-')[1] || '').toUpperCase();
+      p.appendChild(g);
+    }
+    p.appendChild(document.createTextNode(line));
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function updateScanning(source, grade, scorePct) {
+    if (!source) return;
+    var short = source.replace(/^https?:\/\//, '');
+    if (short.length > 90) short = short.slice(0, 87) + '…';
+    var detail = '';
+    if (grade) detail = ' — graded ' + grade;
+    if (scorePct != null) detail += ' (' + scorePct.toFixed(1) + '%)';
+    nowScanning.innerHTML = 'Last scanned: <span class="src"></span>' + detail;
+    nowScanning.querySelector('.src').textContent = short;
+  }
+
+  function renderReport() {
+    if (hasReport) return;
+    hasReport = true;
+    var heading = document.getElementById('reportHeading');
+    if (!heading) {
+      heading = document.createElement('h2');
+      heading.id = 'reportHeading';
       heading.style.marginTop = '1.5rem';
-      var meta = document.createElement('p');
-      meta.className = 'muted';
-      meta.innerHTML = '<a href="/runs/' + runId + '/report/summary.html" target="_blank" rel="noopener">Open summary in a new tab</a> · <a href="/runs/' + runId + '/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> · <a href="/runs/' + runId + '/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>';
-      var frame = document.createElement('iframe');
-      frame.className = 'report';
-      frame.src = '/runs/' + runId + '/report/summary.html?t=' + Date.now();
-      placeholder.replaceWith(heading);
-      heading.parentNode.insertBefore(meta, heading.nextSibling);
+      heading.textContent = 'Report';
+      placeholder.parentNode.insertBefore(heading, placeholder);
+    }
+    var meta = document.createElement('p');
+    meta.id = 'reportLinks';
+    meta.className = 'muted';
+    meta.innerHTML = '<a href="/runs/' + runId + '/report/summary.html" target="_blank" rel="noopener">Open in a new tab</a> · <a href="/runs/' + runId + '/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> · <a href="/runs/' + runId + '/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>';
+    var frame = document.createElement('iframe');
+    frame.className = 'report';
+    frame.id = 'reportFrame';
+    frame.src = '/runs/' + runId + '/report/summary.html?t=' + Date.now();
+    if (placeholder) {
+      placeholder.replaceWith(meta);
       meta.parentNode.insertBefore(frame, meta.nextSibling);
-    } else if (existingFrame) {
-      // Already had a frame from server-rendered template; force-refresh.
-      existingFrame.src = existingFrame.src.split('?')[0] + '?t=' + Date.now();
     }
   }
 
+  // EventSource subscription
   var es = new EventSource('/api/runs/' + runId + '/events');
   es.onmessage = function(ev) {
     var data;
     try { data = JSON.parse(ev.data); } catch (e) { return; }
-    if (data._eos) {
-      es.close();
-      return;
-    }
+    if (data._eos) { es.close(); return; }
+
     var phase = data.phase || '';
-    if (phase === 'starting' || phase === 'acquiring') {
+
+    if (phase === 'starting') {
       setStatus('running', 'running');
-      append('[' + phase + '] ' + (data.message || ''));
+      progressBox.classList.remove('idle','done','failed');
+      setActivePhase('starting');
+      appendLog(data.message || 'Starting…');
+    } else if (phase === 'acquiring') {
+      setStatus('running', 'running');
+      setActivePhase('acquiring');
+      appendLog(data.message || 'Downloading…');
     } else if (phase === 'evaluating') {
+      setStatus('running', 'running');
+      setActivePhase('evaluating');
       var done = data.n_done || 0;
       var total = data.n_total || 0;
-      setStatus('running', 'running');
       setProgress(done, total, data.n_critical_failed, data.n_errored);
-      var src = (data.current_source || '').replace(/^https?:\/\//, '');
+      if (data.last_grade && Object.prototype.hasOwnProperty.call(gradeCounts, data.last_grade)) {
+        gradeCounts[data.last_grade]++;
+        refreshGradeDist();
+      }
+      updateScanning(data.current_source, data.last_grade, data.last_score_pct);
       var grade = data.last_grade ? 'grade-' + data.last_grade : '';
-      append('[' + done + '/' + total + '] ' + src + (data.last_score_pct != null ? ' (' + data.last_score_pct.toFixed(1) + '%)' : ''), grade);
+      var msg = '[' + done + '/' + total + '] ' + (data.current_source || '');
+      if (data.last_score_pct != null) msg += '  (' + data.last_score_pct.toFixed(1) + '%)';
+      appendLog(msg, grade);
     } else if (phase === 'done') {
       setStatus('done', 'done');
+      progressBox.classList.add('done'); progressBox.classList.remove('idle','failed');
+      setActivePhase('done');
       setProgress(data.n_done, data.n_total, data.n_critical_failed, data.n_errored);
-      append('Run finished.');
-      ensureReportLoaded();
+      nowScanning.innerHTML = '<strong style="color:var(--good);">✓ All ' + (data.n_total || 0) + ' PDFs evaluated.</strong>';
+      appendLog('Run finished.');
+      renderReport();
     } else if (phase === 'failed') {
       setStatus('failed', 'failed');
-      append('FAILED: ' + (data.message || ''));
+      progressBox.classList.add('failed'); progressBox.classList.remove('idle','done');
+      appendLog('FAILED: ' + (data.message || ''));
+      nowScanning.innerHTML = '<strong style="color:var(--bad);">Run failed.</strong>';
     } else if (phase === 'finished') {
       setStatus('done', 'done');
+      progressBox.classList.add('done');
     }
   };
   es.onerror = function() {
-    // Server may close the stream when the run finishes.
     setTimeout(function() { es.close(); }, 50);
   };
 })();
