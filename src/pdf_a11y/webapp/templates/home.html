@@ -61,31 +61,41 @@ https://example.gov/b.pdf
 
 <h2>System dependencies</h2>
 <div class="card">
-  <p class="muted">pdf-a11y wraps several external tools. Missing tools cause specific check categories to be skipped — the run still completes.</p>
-  <div class="dep-list">
-    <div class="dep {{ 'ok' if deps.verapdf.ok else 'bad' }}">
-      <div class="name">veraPDF {{ '✓' if deps.verapdf.ok else '✗ missing' }}</div>
-      <div class="path">{{ deps.verapdf.path or 'PDF/UA-1 conformance checks will be skipped.' }}</div>
-    </div>
-    <div class="dep {{ 'ok' if deps.java.ok else 'bad' }}">
-      <div class="name">Java {{ '✓' if deps.java.ok else '✗ missing' }}</div>
-      <div class="path">{{ deps.java.path or 'Required by veraPDF.' }}</div>
-    </div>
-    <div class="dep {{ 'ok' if deps.tesseract.ok else 'bad' }}">
-      <div class="name">Tesseract {{ '✓' if deps.tesseract.ok else '✗ missing' }}</div>
-      <div class="path">{{ deps.tesseract.path or 'Scan-only PDF detection will be heuristic without OCR confirmation.' }}</div>
+  <p class="muted">ObservePoint PDF Validation wraps several external tools. Missing tools cause specific check categories to be skipped — the run still completes.</p>
+  {% set missing = [] %}
+  {% for d in [deps.verapdf, deps.java, deps.tesseract] %}{% if not d.ok %}{% if missing.append(d) %}{% endif %}{% endif %}{% endfor %}
+
+  {% if missing|length > 1 and deps.install_all_cmd %}
+  <div class="install-all">
+    <div class="install-all-label">Install everything missing in one go ({{ deps|attr('platform') }})</div>
+    <div class="install-cmd-row">
+      <code class="install-cmd">{{ deps.install_all_cmd }}</code>
+      <button type="button" class="btn secondary copy-btn" data-clipboard="{{ deps.install_all_cmd }}">Copy</button>
     </div>
   </div>
-  {% if not (deps.verapdf.ok and deps.java.ok and deps.tesseract.ok) %}
-  <p style="margin: 0.75rem 0 0;" class="muted">
-    <strong>Install instructions.</strong>
-    {% if deps.platform == 'darwin' %}
-      <code>brew install verapdf openjdk tesseract</code>
-    {% elif deps.platform == 'win32' %}
-      Run <code>bootstrap.ps1</code> from the project repo, or use winget: <code>winget install EclipseAdoptium.Temurin.21.JDK</code>, <code>winget install UB-Mannheim.TesseractOCR</code>, and <a href="https://github.com/veraPDF/veraPDF-apps/releases" target="_blank" rel="noopener">download veraPDF</a>.
-    {% else %}
-      <code>sudo apt install openjdk-21-jre tesseract-ocr</code> and <a href="https://github.com/veraPDF/veraPDF-apps/releases" target="_blank" rel="noopener">download veraPDF</a>.
-    {% endif %}
+  {% endif %}
+
+  <div class="dep-list">
+    {% for d, hint in [
+        (deps.verapdf, 'PDF/UA-1 conformance checks will be skipped.'),
+        (deps.java,    'Required by veraPDF.'),
+        (deps.tesseract, 'Scan-only PDF detection falls back to a heuristic without OCR confirmation.'),
+    ] %}
+      <div class="dep {{ 'ok' if d.ok else 'bad' }}">
+        <div class="name">{{ d.name | capitalize if d.name != 'verapdf' else 'veraPDF' }} {{ '✓' if d.ok else '✗ missing' }}</div>
+        <div class="path">{{ d.path or hint }}</div>
+        {% if not d.ok and d.install_cmd %}
+        <div class="install-cmd-row">
+          <code class="install-cmd">{{ d.install_cmd }}</code>
+          <button type="button" class="btn secondary copy-btn" data-clipboard="{{ d.install_cmd }}">Copy</button>
+        </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  {% if missing %}
+  <p class="muted" style="margin-top:0.85rem; font-size:0.85em;">
+    Paste the command into your terminal and re-run <code>pdf-a11y serve</code> after installation completes.
   </p>
   {% endif %}
 </div>
@@ -139,6 +149,31 @@ https://example.gov/b.pdf
 {% block scripts %}
 <script>
 (function() {
+  // Copy-to-clipboard buttons next to install commands.
+  document.querySelectorAll('.copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', async function() {
+      var text = btn.dataset.clipboard || '';
+      var orig = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = '✓ Copied';
+        btn.classList.add('copied');
+      } catch (e) {
+        // Older browsers / non-secure contexts: fall back to manual select.
+        var sel = window.getSelection();
+        var range = document.createRange();
+        range.selectNodeContents(btn.previousElementSibling || btn);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        btn.textContent = 'Select + Cmd/Ctrl-C';
+      }
+      setTimeout(function() {
+        btn.textContent = orig;
+        btn.classList.remove('copied');
+      }, 1500);
+    });
+  });
+
   var tabs = document.querySelectorAll('.tab');
   var panels = document.querySelectorAll('.tab-panel');
   var hiddenSource = document.querySelector('input[name="source"]');

@@ -438,18 +438,67 @@ code {
 .grade-cell.F.has { color: var(--grade-f); }
 
 /* ---------------- System dep tiles ---------------- */
-.dep-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem; }
+.dep-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.6rem; }
 .dep {
   border: 1px solid var(--border-soft);
   border-left: 4px solid var(--good);
   border-radius: var(--radius-sm);
   padding: 0.7rem 0.9rem;
   background: var(--bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
 }
 .dep.bad { border-left-color: var(--bad); background: rgba(255, 107, 107, 0.05); }
 .dep .name { font-weight: 600; font-size: 0.95em; color: var(--fg); }
-.dep .path { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78em; word-break: break-all; margin-top: 0.2rem; }
+.dep .path { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78em; word-break: break-all; margin-top: 0.1rem; }
 .dep.bad .path { color: var(--bad); }
+
+/* Install hint inside a bad dep tile + bulk install card */
+.install-cmd-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+  margin-top: 0.25rem;
+}
+.install-cmd {
+  flex: 1 1 auto;
+  background: #0F0F0F;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.82em;
+  color: var(--op-yellow);
+  white-space: nowrap;
+  overflow-x: auto;
+  user-select: all;
+}
+.copy-btn {
+  flex: 0 0 auto;
+  font-size: 0.78em !important;
+  padding: 0.3rem 0.85rem !important;
+  white-space: nowrap;
+}
+.copy-btn.copied {
+  background: var(--good) !important;
+  border-color: var(--good) !important;
+  color: #1E1E1E !important;
+}
+.install-all {
+  background: rgba(242, 205, 20, 0.08);
+  border: 1px solid rgba(242, 205, 20, 0.3);
+  border-left: 4px solid var(--op-yellow);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+}
+.install-all-label {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--fg);
+  margin-bottom: 0.4rem;
+}
 
 /* ---------------- iframe report ----------------
    The batch report has a wide table (16+ columns). Break out of the

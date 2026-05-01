@@ -200,18 +200,66 @@ def _persist_settings(**kwargs: Any) -> None:
     save_settings(s)
 
 
-def _system_deps_status() -> dict[str, Any]:
-    """For the home-page badge: are veraPDF / Java / Tesseract available?"""
+# Per-platform install commands per dependency. The "all" entry is what we
+# show as the bulk command when more than one dep is missing.
+_INSTALL_COMMANDS: dict[str, dict[str, str]] = {
+    "darwin": {
+        "verapdf": "brew install verapdf",
+        "java": "brew install openjdk",
+        "tesseract": "brew install tesseract",
+        "all": "brew install verapdf openjdk tesseract",
+    },
+    "win32": {
+        # veraPDF on Windows ships an installer; piping the URL is the closest
+        # we can get to a one-liner without scoop.
+        "verapdf": (
+            "powershell -Command \"Start-Process "
+            "'https://github.com/veraPDF/veraPDF-apps/releases'\""
+        ),
+        "java": "winget install --id EclipseAdoptium.Temurin.21.JDK -e",
+        "tesseract": "winget install --id UB-Mannheim.TesseractOCR -e",
+        "all": (
+            "winget install --id EclipseAdoptium.Temurin.21.JDK -e; "
+            "winget install --id UB-Mannheim.TesseractOCR -e"
+        ),
+    },
+    # Linux fallback (Debian / Ubuntu friendly; covers the most common case).
+    "linux": {
+        "verapdf": "# Download installer: https://github.com/veraPDF/veraPDF-apps/releases",
+        "java": "sudo apt update && sudo apt install -y openjdk-21-jre",
+        "tesseract": "sudo apt install -y tesseract-ocr",
+        "all": "sudo apt update && sudo apt install -y openjdk-21-jre tesseract-ocr",
+    },
+}
 
-    def _bin(name: str) -> dict[str, Any]:
+
+def _platform_install_table() -> dict[str, str]:
+    return _INSTALL_COMMANDS.get(sys.platform, _INSTALL_COMMANDS["linux"])
+
+
+def _system_deps_status() -> dict[str, Any]:
+    """For the home-page badge: are veraPDF / Java / Tesseract available?
+
+    Each entry includes a copy-paste install command for the current OS so
+    the home page can render a "Copy" button next to a missing dep.
+    """
+    install = _platform_install_table()
+
+    def _bin(name: str, install_key: str) -> dict[str, Any]:
         path = shutil.which(name)
-        return {"name": name, "ok": path is not None, "path": path}
+        return {
+            "name": name,
+            "ok": path is not None,
+            "path": path,
+            "install_cmd": install.get(install_key, ""),
+        }
 
     return {
         "platform": sys.platform,
-        "verapdf": _bin("verapdf"),
-        "tesseract": _bin("tesseract"),
-        "java": _bin("java"),
+        "verapdf": _bin("verapdf", "verapdf"),
+        "tesseract": _bin("tesseract", "tesseract"),
+        "java": _bin("java", "java"),
+        "install_all_cmd": install.get("all", ""),
     }
 
 
