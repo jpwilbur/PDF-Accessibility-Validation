@@ -115,7 +115,7 @@ def create_app() -> FastAPI:
                     last_op_report_id=op_report_id,
                     last_concurrency=concurrency or 3,
                 )
-            rec = runner.start_observepoint(
+            rec = await runner.start_observepoint(
                 api_key=op_api_key,
                 report_id=op_report_id,
                 concurrency=concurrency,

@@ -179,7 +179,15 @@ https://example.gov/b.pdf
     if (conc) formData.set('concurrency', conc.value);
     fetch('/api/runs', { method: 'POST', body: formData })
       .then(function(r) {
-        if (!r.ok) return r.json().then(function(j) { throw new Error(j.detail || 'Request failed'); });
+        if (!r.ok) {
+          // Try JSON error first; fall back to text so 500s with plain bodies
+          // still surface a useful message.
+          return r.text().then(function(t) {
+            var msg = t || ('HTTP ' + r.status);
+            try { var j = JSON.parse(t); if (j && j.detail) msg = j.detail; } catch (_) {}
+            throw new Error(msg);
+          });
+        }
         return r.json();
       })
       .then(function(j) { window.location.href = j.redirect; })

@@ -114,7 +114,7 @@ class RunRunner:
             label=label,
         )
 
-    def start_observepoint(
+    async def start_observepoint(
         self,
         *,
         api_key: str,
@@ -122,12 +122,15 @@ class RunRunner:
         concurrency: int | None = None,
         label: str | None = None,
     ) -> RunRecord:
-        """Resolve URLs from ObservePoint synchronously (so the user sees an
-        early error if the report ID/API key is wrong) then kick off the
-        async pipeline thread."""
-        from pdf_a11y.observepoint import fetch_pdf_urls
+        """Resolve URLs from ObservePoint (awaitable: caller may already be
+        inside an event loop) then kick off the pipeline thread.
 
-        result = fetch_pdf_urls(api_key=api_key, report_id=report_id)
+        We deliberately fetch URLs *before* starting the worker thread so the
+        user sees an early error if the report ID/API key is wrong.
+        """
+        from pdf_a11y.observepoint import fetch_pdf_urls_async
+
+        result = await fetch_pdf_urls_async(api_key=api_key, report_id=report_id)
         if result.error:
             # Create a record so it shows up in history with the error.
             run_id = new_run_id()
