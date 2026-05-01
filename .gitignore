@@ -13,7 +13,7 @@ build/
 .DS_Store
 .env
 
-# project caches & outputs
-.cache/
-reports/
-runs/
+# project caches & outputs (anchored to project root only)
+/.cache/
+/reports/
+# runtime run output goes under ~/.pdf-a11y/ (platformdirs), not the repo
