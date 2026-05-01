@@ -50,15 +50,37 @@ def _root(
 @app.command()
 def evaluate(
     inputs: Annotated[
-        list[str],
+        list[str] | None,
         typer.Argument(
             help=(
                 "One or more inputs: a URL, a local PDF path, a directory of PDFs, "
                 "or a CSV/.txt file listing URLs (CSV must have a 'url' column; "
-                "additional columns are passed through as metadata)."
+                "additional columns are passed through as metadata). Omit when "
+                "using --op-report-id."
             )
         ),
-    ],
+    ] = None,
+    op_report_id: Annotated[
+        str | None,
+        typer.Option(
+            "--op-report-id",
+            help=(
+                "Pull URLs from an ObservePoint saved-report by ID. The saved "
+                "report MUST expose a LINK_URL column."
+            ),
+        ),
+    ] = None,
+    op_api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--op-api-key",
+            help=(
+                "ObservePoint API key (required with --op-report-id). "
+                "Defaults to env var OP_API_KEY if set."
+            ),
+            envvar="OP_API_KEY",
+        ),
+    ] = None,
     output_dir: Annotated[
         Path, typer.Option("--output-dir", "-o", help="Directory for HTML/JSON output.")
     ] = Path("./reports"),
@@ -85,9 +107,49 @@ def evaluate(
     if concurrency is not None:
         config.network.concurrency = concurrency
 
-    sources, user_metadata = _expand_inputs(inputs)
+    sources: list[str] = []
+    user_metadata: list[dict[str, str]] = []
+
+    if op_report_id:
+        if not op_api_key:
+            console.print(
+                "[red]--op-api-key is required when --op-report-id is set "
+                "(or set OP_API_KEY).[/red]"
+            )
+            raise typer.Exit(code=2)
+        from pdf_a11y.observepoint import fetch_pdf_urls
+
+        console.print(
+            f"Fetching URLs from ObservePoint saved report "
+            f"[bold]{op_report_id}[/bold]…"
+        )
+        op_result = fetch_pdf_urls(api_key=op_api_key, report_id=op_report_id)
+        if op_result.error:
+            console.print(f"[red]{op_result.error}[/red]")
+            raise typer.Exit(code=1)
+        console.print(
+            f"  → '{op_result.report_name}' ({op_result.grid_entity_type}) — "
+            f"{len(op_result.urls)} URLs"
+        )
+        for url in op_result.urls:
+            sources.append(url)
+            user_metadata.append(
+                {
+                    "op_report_id": op_report_id,
+                    "op_report_name": op_result.report_name or "",
+                }
+            )
+
+    if inputs:
+        extra_sources, extra_meta = _expand_inputs(inputs)
+        sources.extend(extra_sources)
+        user_metadata.extend(extra_meta)
+
     if not sources:
-        console.print("[red]No PDFs to evaluate.[/red]")
+        console.print(
+            "[red]No PDFs to evaluate.[/red] Pass file/URL arguments or "
+            "use --op-report-id."
+        )
         raise typer.Exit(code=1)
 
     console.print(
