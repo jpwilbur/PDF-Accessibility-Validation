@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF accessibility report — {{ report.metadata.title or report.metadata.source }}</title>
+<style>{% include "_base.css" %}</style>
+</head>
+<body>
+
+<header class="banner" role="banner">
+  <div class="row">
+    <div class="grade {{ report.score.grade | grade_class }}" aria-hidden="true">{{ report.score.grade }}</div>
+    <div>
+      <h1>{{ report.metadata.title or report.metadata.source }}</h1>
+      <div class="row" style="gap:1.25rem">
+        <span class="score-pct" aria-label="Score percent">{{ '%.1f' | format(report.score.score_pct) }}%</span>
+        <span class="score-meta">grade <strong>{{ report.score.grade }}</strong></span>
+        {% if report.score.critical_fail %}
+          <span class="pill sev-critical">Critical fail</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="banner-meta" aria-label="Document metadata">
+    <dl>
+      <dt>Source</dt>           <dd><a href="{{ report.metadata.source }}">{{ report.metadata.source }}</a></dd>
+      {% if report.metadata.final_url and report.metadata.final_url != report.metadata.source %}
+      <dt>Final URL</dt>        <dd><a href="{{ report.metadata.final_url }}">{{ report.metadata.final_url }}</a></dd>
+      {% endif %}
+      <dt>Pages</dt>            <dd>{{ report.metadata.page_count or '—' }}</dd>
+      <dt>Size</dt>             <dd>{{ '%.2f' | format(report.metadata.byte_size_mb) }} MB ({{ '{:,}'.format(report.metadata.byte_size) }} bytes)</dd>
+      <dt>Tagged</dt>           <dd>{{ 'yes' if report.metadata.has_tagged_structure else 'no' }}</dd>
+      <dt>Language</dt>         <dd>{{ report.metadata.language or '—' }}</dd>
+      <dt>PDF/UA claim</dt>     <dd>{{ 'yes' if report.metadata.claims_pdf_ua else 'no' }}</dd>
+      <dt>Encrypted</dt>        <dd>{{ 'yes' if report.metadata.encrypted else 'no' }}{% if report.metadata.encryption_blocks_at %} (blocks AT){% endif %}</dd>
+      <dt>Form</dt>             <dd>{% if report.metadata.has_xfa %}XFA (legacy/deprecated){% elif report.metadata.has_acroform %}AcroForm{% else %}—{% endif %}</dd>
+      <dt>Bookmarks</dt>        <dd>{{ 'yes' if report.metadata.has_bookmarks else 'no' }}</dd>
+      <dt>PDF version</dt>      <dd>{{ report.metadata.pdf_version or '—' }}</dd>
+      <dt>Producer</dt>         <dd>{{ report.metadata.producer or '—' }}</dd>
+      <dt>Creator</dt>          <dd>{{ report.metadata.creator or '—' }}</dd>
+      <dt>Created</dt>          <dd>{{ report.metadata.creation_date or '—' }}</dd>
+      <dt>Last modified</dt>    <dd>{{ report.metadata.modification_date or '—' }}{% if report.metadata.days_since_modified is not none %} ({{ report.metadata.days_since_modified }} days ago){% endif %}</dd>
+      {% if report.metadata.is_duplicate %}
+      <dt>Duplicate</dt>        <dd><span class="pill sev-warning">also appears elsewhere in this batch</span></dd>
+      {% endif %}
+      <dt>SHA-256</dt>          <dd><code>{{ report.metadata.sha256 }}</code></dd>
+    </dl>
+  </div>
+</header>
+
+<main>
+
+{% if report.error %}
+  <section aria-labelledby="err">
+    <h2 id="err">Pipeline error</h2>
+    <div class="card sev-critical">
+      <p>{{ report.error }}</p>
+    </div>
+  </section>
+{% endif %}
+
+{% if report.score.critical_fail %}
+  <section aria-labelledby="cfail">
+    <h2 id="cfail">Why this is a Critical fail</h2>
+    <ul>
+      {% for cid in report.score.critical_fail_reasons %}
+        <li>Triggered <code>{{ cid }}</code> — see findings below.</li>
+      {% endfor %}
+    </ul>
+    <p class="muted">Critical-fail checks override the numeric score. The document
+    is unusable by assistive technology in its current form.</p>
+  </section>
+{% endif %}
+
+<section aria-labelledby="fixfirst">
+  <h2 id="fixfirst">Fix first</h2>
+  {% if report.top_findings %}
+    <div class="cards">
+      {% for f in report.top_findings %}
+        <article class="card {{ f.severity | severity_class }}">
+          <h3 class="card-title">
+            <span class="pill {{ f.severity | severity_class }}">{{ f.severity.value }}</span>
+            <span class="check-id">{{ f.check_id }}</span>
+            <span>{{ f.message }}</span>
+          </h3>
+          <p class="card-rem"><strong>Fix:</strong> {{ f.remediation }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">No automated issues detected. A manual accessibility review is still recommended.</div>
+  {% endif %}
+</section>
+
+{% for sev_label, items in grouped.items() %}
+  {% if items %}
+    <section aria-labelledby="sev-{{ sev_label | lower }}">
+      <h2 id="sev-{{ sev_label | lower }}">{{ sev_label }} issues ({{ items|length }})</h2>
+      <div class="cards">
+        {% for f in items %}
+          <article class="card sev-{{ sev_label | lower }}">
+            <h3 class="card-title">
+              <span class="check-id">{{ f.check_id }}</span>
+              <span>{{ f.message }}</span>
+            </h3>
+            {% if f.page is not none or f.location %}
+              <p class="card-loc">
+                {% if f.page is not none %}Page {{ f.page }}{% endif %}
+                {% if f.page is not none and f.location %} — {% endif %}
+                {% if f.location %}{{ f.location }}{% endif %}
+              </p>
+            {% endif %}
+            <p class="card-rem"><strong>Fix:</strong> {{ f.remediation }}</p>
+            {% if f.standards %}
+              <p class="card-std"><strong>Standards:</strong>
+              {% for s in f.standards %}
+                {% if s.url %}<a href="{{ s.url }}">{{ s.standard.value }} §{{ s.clause }}</a>{% else %}{{ s.standard.value }} §{{ s.clause }}{% endif %}{% if not loop.last %}, {% endif %}
+              {% endfor %}
+              </p>
+            {% endif %}
+            {% if f.evidence %}
+              <details><summary>Evidence</summary><pre>{{ f.evidence | tojson(indent=2) }}</pre></details>
+            {% endif %}
+            {% if f.requires_manual_verification %}
+              <p class="muted">⚑ Heuristic — please verify manually before remediation.</p>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endfor %}
+
+{% if manual %}
+  <section aria-labelledby="manual">
+    <h2 id="manual">Manual verification needed</h2>
+    <p class="muted">These specific findings were heuristic. Please verify before remediation.</p>
+    <ul>
+      {% for f in manual %}
+        <li><span class="check-id">{{ f.check_id }}</span> — {{ f.message }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+
+<details>
+  <summary>Scoring breakdown ({{ report.score.raw_penalty }} / {{ report.score.max_penalty }} penalty)</summary>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Severity</th><th>Weight</th><th>Triggered</th><th>Occurrences</th><th>Penalty</th><th>Applicable</th></tr>
+    </thead>
+    <tbody>
+      {% for b in report.score.breakdown %}
+        <tr>
+          <td><code>{{ b.check_id }}</code> — {{ b.name }}</td>
+          <td><span class="pill {{ b.severity | severity_class }}">{{ b.severity.value }}</span></td>
+          <td>{{ b.weight }}</td>
+          <td>{{ 'yes' if b.triggered else 'no' }}</td>
+          <td>{{ b.occurrences }}</td>
+          <td>{{ b.penalty }}</td>
+          <td>{{ 'yes' if b.applicable else 'no' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">score = max(0, 100 × (1 − raw_penalty / max_penalty))</p>
+</details>
+
+{% if report.user_metadata %}
+  <details>
+    <summary>Input metadata</summary>
+    <dl class="banner-meta">
+      {% for k, v in report.user_metadata.items() %}
+        <dt>{{ k }}</dt><dd>{{ v }}</dd>
+      {% endfor %}
+    </dl>
+  </details>
+{% endif %}
+
+</main>
+
+<footer>
+  <p>Generated by <strong>pdf-a11y</strong> {{ report.tool_versions.pdf_a11y }} · python {{ report.tool_versions.python }} · pikepdf {{ report.tool_versions.pikepdf or '?' }} · PyMuPDF {{ report.tool_versions.pymupdf or '?' }} · tesseract {{ report.tool_versions.tesseract or '—' }} · veraPDF {{ report.tool_versions.verapdf or '—' }}</p>
+  <p>Report generated {{ report.finished_at.isoformat(timespec='seconds') }} · evaluation {{ '%.0f' | format(report.duration_ms) }} ms</p>
+</footer>
+
+</body>
+</html>

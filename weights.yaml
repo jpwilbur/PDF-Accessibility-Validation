@@ -1,0 +1,23 @@
+# Severity weights used by the scoring engine.
+# Tune these to match your org's compliance posture.
+# Per spec: each finding contributes (weight × occurrence_count) to raw_penalty;
+# each applicable check contributes (weight × 1) to max_penalty.
+severities:
+  critical: 10
+  major: 4
+  minor: 1
+  warning: 0
+
+# Letter-grade thresholds (score_pct).
+grades:
+  A: 95
+  B: 85
+  C: 70
+  D: 50
+  # below D = F
+
+# Critical-fail override: when triggered, document is graded F regardless of score.
+critical_fail_check_ids:
+  - STRUCT-001  # untagged
+  - STRUCT-005  # encrypted, AT-blocking
+  - STRUCT-008  # scan-only, no text layer

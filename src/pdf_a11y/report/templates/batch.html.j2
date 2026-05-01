@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF accessibility batch report — {{ batch.total }} documents</title>
+<style>{% include "_base.css" %}</style>
+</head>
+<body>
+
+<header class="banner">
+  <h1>Batch accessibility report</h1>
+  <div class="row">
+    <div><strong>{{ batch.total }}</strong> documents</div>
+    <div><strong>{{ batch.critical_failed }}</strong> critical failures</div>
+    <div><strong>{{ batch.errored }}</strong> errors</div>
+    <div class="score-meta">{{ batch.started_at.isoformat(timespec='seconds') }} → {{ batch.finished_at.isoformat(timespec='seconds') }}</div>
+  </div>
+</header>
+
+<main>
+
+<div class="toolbar" role="search">
+  <label>Search
+    <input type="text" id="q" placeholder="filename, URL, title, finding…" autocomplete="off">
+  </label>
+  <label>Min score
+    <input type="number" id="minScore" min="0" max="100" step="1" style="width:5rem">
+  </label>
+  <label>Max score
+    <input type="number" id="maxScore" min="0" max="100" step="1" style="width:5rem">
+  </label>
+  <label>Grade
+    <select id="grade">
+      <option value="">any</option>
+      {% for g in ['A','B','C','D','F'] %}
+        <option value="{{ g }}">{{ g }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" id="critOnly"> Critical-fail only</label>
+  <label><input type="checkbox" id="errOnly"> Errors only</label>
+  <label><input type="checkbox" id="dupOnly"> Duplicates only</label>
+  <label><input type="checkbox" id="formOnly"> Has form only</label>
+  <span class="grow"></span>
+  <span class="kbd-hint" aria-live="polite"><span id="visibleCount">{{ rows|length }}</span> shown</span>
+</div>
+
+<div style="overflow-x:auto">
+<table id="rpt">
+  <thead>
+    <tr>
+      <th><button type="button" data-sort="grade">Grade</button></th>
+      <th><button type="button" data-sort="score">Score</button></th>
+      <th>Document</th>
+      <th><button type="button" data-sort="pages">Pages</button></th>
+      <th><button type="button" data-sort="size">Size (MB)</button></th>
+      <th>Tagged</th>
+      <th>Lang</th>
+      <th>Form</th>
+      <th>Bookmarks</th>
+      <th>PDF/UA</th>
+      <th>Encrypted</th>
+      <th>Dup</th>
+      <th><button type="button" data-sort="critical">Crit</button></th>
+      <th><button type="button" data-sort="major">Maj</button></th>
+      <th><button type="button" data-sort="minor">Min</button></th>
+      <th>Producer</th>
+      <th><button type="button" data-sort="modified">Last modified</button></th>
+      <th>Top issues</th>
+      <th>Report</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      {% set r = row.report %}
+      {% set m = r.metadata %}
+      {% set counts = {'Critical':0,'Major':0,'Minor':0,'Warning':0} %}
+      {% for f in r.findings %}{% if counts.update({f.severity.value: counts[f.severity.value]+1}) %}{% endif %}{% endfor %}
+      {% set form_label = ('XFA' if m.has_xfa else ('AcroForm' if m.has_acroform else '—')) %}
+      <tr
+        data-grade="{{ r.score.grade }}"
+        data-score="{{ r.score.score_pct }}"
+        data-pages="{{ m.page_count or 0 }}"
+        data-size="{{ m.byte_size_mb }}"
+        data-modified="{{ m.modification_date or '' }}"
+        data-critical="{{ counts['Critical'] }}"
+        data-major="{{ counts['Major'] }}"
+        data-minor="{{ counts['Minor'] }}"
+        data-criticalfail="{{ '1' if r.score.critical_fail else '0' }}"
+        data-error="{{ '1' if r.error else '0' }}"
+        data-duplicate="{{ '1' if m.is_duplicate else '0' }}"
+        data-form="{{ '1' if m.has_fillable_form else '0' }}"
+        data-haystack="{{ ((m.title or '') + ' ' + m.source + ' ' + (m.producer or '') + ' ' + (r.findings | map(attribute='check_id') | list | join(' '))) | lower }}"
+      >
+        <td><span class="grade {{ r.score.grade | grade_class }}" style="width:2rem;height:2rem;font-size:1rem">{{ r.score.grade }}</span></td>
+        <td>{{ '%.1f' | format(r.score.score_pct) }}</td>
+        <td>
+          <strong>{{ m.title or m.source }}</strong><br>
+          <span class="muted"><a href="{{ m.source }}">{{ m.source }}</a></span>
+        </td>
+        <td>{{ m.page_count or '—' }}</td>
+        <td>{{ '%.2f' | format(m.byte_size_mb) }}</td>
+        <td>{{ 'yes' if m.has_tagged_structure else 'no' }}</td>
+        <td>{{ m.language or '—' }}</td>
+        <td>{{ form_label }}</td>
+        <td>{{ 'yes' if m.has_bookmarks else 'no' }}</td>
+        <td>{{ 'yes' if m.claims_pdf_ua else 'no' }}</td>
+        <td>{{ ('yes (blocks AT)' if m.encryption_blocks_at else 'yes') if m.encrypted else 'no' }}</td>
+        <td>{{ 'yes' if m.is_duplicate else '—' }}</td>
+        <td>{{ counts['Critical'] }}</td>
+        <td>{{ counts['Major'] }}</td>
+        <td>{{ counts['Minor'] }}</td>
+        <td><span class="muted">{{ (m.producer or '—')[:40] }}</span></td>
+        <td>{{ m.modification_date or '—' }}</td>
+        <td>{{ row.top }}</td>
+        <td>{% if row.link %}<a href="{{ row.link }}">view</a>{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+</main>
+
+<footer>
+  <p>Generated by <strong>pdf-a11y</strong> {{ batch.tool_versions.pdf_a11y }} · veraPDF {{ batch.tool_versions.verapdf or '—' }} · {{ batch.finished_at.isoformat(timespec='seconds') }}</p>
+</footer>
+
+<script>
+(function() {
+  var tbody = document.querySelector('#rpt tbody');
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var visibleCount = document.getElementById('visibleCount');
+  var q = document.getElementById('q');
+  var minScore = document.getElementById('minScore');
+  var maxScore = document.getElementById('maxScore');
+  var grade = document.getElementById('grade');
+  var critOnly = document.getElementById('critOnly');
+  var errOnly = document.getElementById('errOnly');
+  var dupOnly = document.getElementById('dupOnly');
+  var formOnly = document.getElementById('formOnly');
+
+  function apply() {
+    var qv = (q.value || '').trim().toLowerCase();
+    var lo = minScore.value === '' ? -Infinity : parseFloat(minScore.value);
+    var hi = maxScore.value === '' ? Infinity : parseFloat(maxScore.value);
+    var gv = grade.value;
+    var co = critOnly.checked;
+    var eo = errOnly.checked;
+    var dup = dupOnly.checked;
+    var fo = formOnly.checked;
+    var n = 0;
+    rows.forEach(function(tr) {
+      var s = parseFloat(tr.dataset.score);
+      var ok = true;
+      if (qv && tr.dataset.haystack.indexOf(qv) === -1) ok = false;
+      if (ok && (s < lo || s > hi)) ok = false;
+      if (ok && gv && tr.dataset.grade !== gv) ok = false;
+      if (ok && co && tr.dataset.criticalfail !== '1') ok = false;
+      if (ok && eo && tr.dataset.error !== '1') ok = false;
+      if (ok && dup && tr.dataset.duplicate !== '1') ok = false;
+      if (ok && fo && tr.dataset.form !== '1') ok = false;
+      tr.style.display = ok ? '' : 'none';
+      if (ok) n++;
+    });
+    visibleCount.textContent = String(n);
+  }
+  [q, minScore, maxScore, grade, critOnly, errOnly, dupOnly, formOnly].forEach(function(el) {
+    el.addEventListener('input', apply);
+    el.addEventListener('change', apply);
+  });
+
+  document.querySelectorAll('th button[data-sort]').forEach(function(btn) {
+    var asc = false;
+    btn.addEventListener('click', function() {
+      asc = !asc;
+      var key = btn.dataset.sort;
+      var sorted = rows.slice().sort(function(a, b) {
+        var av = a.dataset[key];
+        var bv = b.dataset[key];
+        var an = parseFloat(av);
+        var bn = parseFloat(bv);
+        var cmp;
+        if (!isNaN(an) && !isNaN(bn)) cmp = an - bn;
+        else cmp = String(av).localeCompare(String(bv));
+        return asc ? cmp : -cmp;
+      });
+      sorted.forEach(function(tr) { tbody.appendChild(tr); });
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
