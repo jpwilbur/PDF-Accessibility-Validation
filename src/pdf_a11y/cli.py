@@ -119,10 +119,7 @@ def evaluate(
             raise typer.Exit(code=2)
         from pdf_a11y.observepoint import fetch_pdf_urls
 
-        console.print(
-            f"Fetching URLs from ObservePoint saved report "
-            f"[bold]{op_report_id}[/bold]…"
-        )
+        console.print(f"Fetching URLs from ObservePoint saved report [bold]{op_report_id}[/bold]…")
         op_result = fetch_pdf_urls(api_key=op_api_key, report_id=op_report_id)
         if op_result.error:
             console.print(f"[red]{op_result.error}[/red]")
@@ -147,8 +144,7 @@ def evaluate(
 
     if not sources:
         console.print(
-            "[red]No PDFs to evaluate.[/red] Pass file/URL arguments or "
-            "use --op-report-id."
+            "[red]No PDFs to evaluate.[/red] Pass file/URL arguments or use --op-report-id."
         )
         raise typer.Exit(code=1)
 

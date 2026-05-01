@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx

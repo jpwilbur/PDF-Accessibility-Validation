@@ -67,7 +67,7 @@ class Pipeline:
         if self._on_progress is not None:
             try:
                 self._on_progress(event)
-            except Exception as e:  # noqa: BLE001 — never let a callback break the pipeline
+            except Exception as e:
                 logger.debug("progress callback raised: %s", e)
 
     async def run(

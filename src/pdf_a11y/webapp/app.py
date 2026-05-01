@@ -21,9 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from pdf_a11y import __version__, paths
 from pdf_a11y.runs import (
-    RunRecord,
     RunStore,
-    Settings,
     load_settings,
     save_settings,
 )
@@ -125,9 +123,7 @@ def create_app() -> FastAPI:
             return JSONResponse({"run_id": rec.id, "redirect": f"/runs/{rec.id}"})
         if source == "manual":
             if not urls:
-                raise HTTPException(
-                    status_code=400, detail="Provide at least one URL or path."
-                )
+                raise HTTPException(status_code=400, detail="Provide at least one URL or path.")
             url_list = [u.strip() for u in urls.splitlines() if u.strip()]
             if not url_list:
                 raise HTTPException(status_code=400, detail="No URLs provided.")
@@ -237,7 +233,7 @@ async def _sse_stream(bus: ProgressBus, run_id: str) -> AsyncIterator[bytes]:
         while True:
             try:
                 event = await asyncio.to_thread(q.get, True, 1.0)
-            except Exception:  # noqa: BLE001 — queue.Empty raised after timeout
+            except Exception:
                 # heartbeat
                 yield b": keepalive\n\n"
                 continue

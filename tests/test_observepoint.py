@@ -11,7 +11,6 @@ import pytest
 from pdf_a11y.observepoint import ObservePointFetchResult, fetch_pdf_urls_async
 from pdf_a11y.observepoint.client import _unwrap_safelinks
 
-
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
@@ -183,9 +182,11 @@ def test_404_for_missing_report() -> None:
 
 def test_empty_api_key_or_report_id_returns_error() -> None:
     a = _run(fetch_pdf_urls_async(api_key="", report_id="42"))
-    assert a.error and "API key" in a.error
+    assert a.error is not None
+    assert "API key" in a.error
     b = _run(fetch_pdf_urls_async(api_key="x", report_id=""))
-    assert b.error and "Report ID" in b.error
+    assert b.error is not None
+    assert "Report ID" in b.error
 
 
 def test_safelinks_unwrapped_in_results() -> None:
@@ -197,9 +198,7 @@ def test_safelinks_unwrapped_in_results() -> None:
     )
     routes = {
         "/reports/grid/saved/42": _saved_response(),
-        "/reports/grid/web-audit-runs": _grid_page(
-            [["x", wrapped, "y"]], page=0, total_pages=1
-        ),
+        "/reports/grid/web-audit-runs": _grid_page([["x", wrapped, "y"]], page=0, total_pages=1),
     }
     transport = _make_handler(routes)
     client = httpx.AsyncClient(transport=transport, base_url="https://api.observepoint.com")

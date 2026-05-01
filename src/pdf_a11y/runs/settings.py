@@ -14,7 +14,6 @@ committed.
 from __future__ import annotations
 
 import json
-import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -50,6 +49,8 @@ def load_settings(path: Path | None = None) -> Settings:
 
 
 def save_settings(settings: Settings, path: Path | None = None) -> None:
+    import contextlib
+
     p = path or paths.settings_path()
     paths.ensure_dirs()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -57,11 +58,9 @@ def save_settings(settings: Settings, path: Path | None = None) -> None:
     tmp = p.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     if sys.platform != "win32":
-        try:
-            os.chmod(tmp, 0o600)
-        except OSError:
-            pass
-    os.replace(tmp, p)
+        with contextlib.suppress(OSError):
+            tmp.chmod(0o600)
+    tmp.replace(p)
 
 
 __all__ = ["Settings", "load_settings", "save_settings"]

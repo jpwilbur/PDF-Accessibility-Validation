@@ -69,14 +69,14 @@ class ProgressBus:
                 state.subscribers.remove(q)
 
     def finish(self, run_id: str) -> None:
+        import contextlib
+
         with self._lock:
             state = self._states.setdefault(run_id, _BusState())
             state.finished = True
             for q in state.subscribers:
-                try:
+                with contextlib.suppress(queue.Full):
                     q.put_nowait({"phase": "finished", "_eos": True})
-                except queue.Full:
-                    pass
 
     def subscribe(self, run_id: str) -> tuple[queue.Queue, dict[str, Any] | None, bool]:
         q: queue.Queue = queue.Queue(maxsize=_BUS_QUEUE_MAXSIZE)
@@ -140,9 +140,7 @@ class RunRunner:
                 output_dir=output_dir,
                 label=label or f"ObservePoint #{report_id}",
             )
-            self.store.update(
-                run_id, status=RunStatus.FAILED, error=result.error, finished=True
-            )
+            self.store.update(run_id, status=RunStatus.FAILED, error=result.error, finished=True)
             self.bus.publish(
                 run_id,
                 {"phase": "failed", "message": result.error, "n_total": 0, "n_done": 0},
@@ -267,11 +265,9 @@ class RunRunner:
                     "summary_url": "report/summary.html",
                 },
             )
-        except Exception as e:  # noqa: BLE001 — pipeline failures must not crash the server
+        except Exception as e:
             logger.exception("run %s failed", run_id)
-            self.store.update(
-                run_id, status=RunStatus.FAILED, error=str(e), finished=True
-            )
+            self.store.update(run_id, status=RunStatus.FAILED, error=str(e), finished=True)
             self.bus.publish(
                 run_id,
                 {"phase": "failed", "message": str(e)},
