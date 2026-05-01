@@ -6,19 +6,19 @@
 <title>{% block title %}ObservePoint PDF Validation{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600;1,700&display=swap">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 {% block head %}{% endblock %}
 </head>
 <body>
 <nav class="topnav" role="navigation">
-  <a class="brand" href="/">
-    <span class="logo">{% include "_logo.svg" %}</span>
-    <span class="brand-text">
-      <span>ObservePoint</span>
-      <small>PDF Validation</small>
+  <a class="brand" href="/" aria-label="ObservePoint PDF Validation — home">
+    <span class="brand-wordmark" aria-hidden="true">
+      <span class="obs">Observe</span><span class="pt">Point</span>
     </span>
+    <span class="brand-divider" aria-hidden="true"></span>
+    <span class="brand-sub">PDF Validation</span>
   </a>
   <a class="navlink" href="/">New run</a>
   <a class="navlink" href="/runs">History</a>
@@ -31,7 +31,7 @@
 </main>
 
 <footer>
-  Local app · runs at <a href="https://www.observepoint.com" target="_blank" rel="noopener">observepoint.com</a> · evaluates against PDF/UA-1, Matterhorn, WCAG 2.1, Section 508.
+  Local app · matches the validation flow at <a href="https://www.observepoint.com" target="_blank" rel="noopener">observepoint.com</a> · evaluates against PDF/UA-1, Matterhorn, WCAG 2.1, Section 508.
 </footer>
 
 {% block scripts %}{% endblock %}
