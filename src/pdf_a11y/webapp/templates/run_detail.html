@@ -1,0 +1,156 @@
+{% extends "_base.html" %}
+{% block title %}pdf-a11y — run {{ run.id }}{% endblock %}
+
+{% block content %}
+<h1>
+  Run
+  <span class="pill pill-{{ run.status }}" id="statusPill">{{ run.status }}</span>
+</h1>
+<p class="muted">
+  ID <code>{{ run.id }}</code> · started {{ run.started_at }}
+  {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
+  {% if run.label %} · {{ run.label }}{% endif %}
+</p>
+
+<div class="card">
+  <div class="field-row">
+    <div>
+      <label>Source</label>
+      {% if run.source_kind == 'observepoint' %}
+        ObservePoint saved report #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
+      {% else %}
+        {{ run.source_kind }} ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
+      {% endif %}
+    </div>
+    <div>
+      <label>Progress</label>
+      <div class="progress">
+        <div class="bar" id="progressBar" style="width: {{ run.progress_pct }}%;"></div>
+        <div class="label" id="progressLabel">{{ run.n_done }} / {{ run.n_total }} done · {{ run.n_critical_failed }} critical-fail · {{ run.n_errored }} errors</div>
+      </div>
+    </div>
+  </div>
+  {% if run.error %}
+  <p class="card" style="background: var(--critical-bg); color: var(--critical-fg); border-color: #f5b5b5; margin-top: 1rem;">
+    <strong>Error:</strong> {{ run.error }}
+  </p>
+  {% endif %}
+</div>
+
+<h2>Live activity</h2>
+<div class="event-log" id="eventLog" aria-live="polite"></div>
+
+{% if summary_exists %}
+<h2 style="margin-top: 1.5rem;">Report</h2>
+<p class="muted">
+  <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener">Open summary in a new tab</a> ·
+  <a href="/runs/{{ run.id }}/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> ·
+  <a href="/runs/{{ run.id }}/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>
+</p>
+<iframe class="report" id="reportFrame" src="/runs/{{ run.id }}/report/summary.html" title="Run summary report"></iframe>
+{% else %}
+<div id="reportPlaceholder" class="card muted">
+  Report files will appear here once the run finishes.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var runId = "{{ run.id }}";
+  var statusPill = document.getElementById('statusPill');
+  var bar = document.getElementById('progressBar');
+  var label = document.getElementById('progressLabel');
+  var log = document.getElementById('eventLog');
+  var placeholder = document.getElementById('reportPlaceholder');
+  var existingFrame = document.getElementById('reportFrame');
+
+  var lastSummaryAvailable = !!existingFrame;
+
+  function append(line, gradeClass) {
+    var p = document.createElement('p');
+    p.className = 'ev';
+    if (gradeClass) {
+      var g = document.createElement('span');
+      g.className = 'grade ' + gradeClass;
+      g.textContent = gradeClass.split('-')[1] || '';
+      p.appendChild(g);
+    }
+    p.appendChild(document.createTextNode(line));
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setStatus(text, kind) {
+    statusPill.textContent = text;
+    statusPill.className = 'pill pill-' + kind;
+  }
+
+  function setProgress(done, total, crit, err) {
+    var pct = total > 0 ? Math.round(100 * done / total) : 0;
+    bar.style.width = pct + '%';
+    label.textContent = done + ' / ' + total + ' done · ' + (crit || 0) + ' critical-fail · ' + (err || 0) + ' errors';
+  }
+
+  function ensureReportLoaded() {
+    if (lastSummaryAvailable) return;
+    lastSummaryAvailable = true;
+    if (placeholder) {
+      var heading = document.createElement('h2');
+      heading.textContent = 'Report';
+      heading.style.marginTop = '1.5rem';
+      var meta = document.createElement('p');
+      meta.className = 'muted';
+      meta.innerHTML = '<a href="/runs/' + runId + '/report/summary.html" target="_blank" rel="noopener">Open summary in a new tab</a> · <a href="/runs/' + runId + '/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> · <a href="/runs/' + runId + '/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>';
+      var frame = document.createElement('iframe');
+      frame.className = 'report';
+      frame.src = '/runs/' + runId + '/report/summary.html?t=' + Date.now();
+      placeholder.replaceWith(heading);
+      heading.parentNode.insertBefore(meta, heading.nextSibling);
+      meta.parentNode.insertBefore(frame, meta.nextSibling);
+    } else if (existingFrame) {
+      // Already had a frame from server-rendered template; force-refresh.
+      existingFrame.src = existingFrame.src.split('?')[0] + '?t=' + Date.now();
+    }
+  }
+
+  var es = new EventSource('/api/runs/' + runId + '/events');
+  es.onmessage = function(ev) {
+    var data;
+    try { data = JSON.parse(ev.data); } catch (e) { return; }
+    if (data._eos) {
+      es.close();
+      return;
+    }
+    var phase = data.phase || '';
+    if (phase === 'starting' || phase === 'acquiring') {
+      setStatus('running', 'running');
+      append('[' + phase + '] ' + (data.message || ''));
+    } else if (phase === 'evaluating') {
+      var done = data.n_done || 0;
+      var total = data.n_total || 0;
+      setStatus('running', 'running');
+      setProgress(done, total, data.n_critical_failed, data.n_errored);
+      var src = (data.current_source || '').replace(/^https?:\/\//, '');
+      var grade = data.last_grade ? 'grade-' + data.last_grade : '';
+      append('[' + done + '/' + total + '] ' + src + (data.last_score_pct != null ? ' (' + data.last_score_pct.toFixed(1) + '%)' : ''), grade);
+    } else if (phase === 'done') {
+      setStatus('done', 'done');
+      setProgress(data.n_done, data.n_total, data.n_critical_failed, data.n_errored);
+      append('Run finished.');
+      ensureReportLoaded();
+    } else if (phase === 'failed') {
+      setStatus('failed', 'failed');
+      append('FAILED: ' + (data.message || ''));
+    } else if (phase === 'finished') {
+      setStatus('done', 'done');
+    }
+  };
+  es.onerror = function() {
+    // Server may close the stream when the run finishes.
+    setTimeout(function() { es.close(); }, 50);
+  };
+})();
+</script>
+{% endblock %}

@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import time
 from collections import Counter
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
 from pdf_a11y import __version__
@@ -30,12 +32,43 @@ from pdf_a11y.scoring import compute_score
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ProgressEvent:
+    """Emitted to the optional progress callback at each PDF and on phase changes."""
+
+    phase: str
+    """One of: 'starting', 'acquiring', 'evaluating', 'finished'."""
+    n_total: int
+    n_done: int
+    n_errored: int
+    n_critical_failed: int
+    current_source: str | None = None
+    last_grade: str | None = None
+    last_score_pct: float | None = None
+    message: str | None = None
+
+
+ProgressCallback = Callable[[ProgressEvent], None]
+
+
 class Pipeline:
-    def __init__(self, config: Config):
+    def __init__(
+        self,
+        config: Config,
+        on_progress: ProgressCallback | None = None,
+    ):
         self.config = config
         self.config.ensure_java_on_path()
         self.checks = all_checks()
         self.tool_versions = _detect_tool_versions()
+        self._on_progress = on_progress
+
+    def _emit(self, event: ProgressEvent) -> None:
+        if self._on_progress is not None:
+            try:
+                self._on_progress(event)
+            except Exception as e:  # noqa: BLE001 — never let a callback break the pipeline
+                logger.debug("progress callback raised: %s", e)
 
     async def run(
         self,
@@ -48,20 +81,71 @@ class Pipeline:
             raise ValueError("user_metadata length must match sources length")
 
         started = datetime.now(UTC)
+        n_total = len(sources)
+
+        self._emit(
+            ProgressEvent(
+                phase="starting",
+                n_total=n_total,
+                n_done=0,
+                n_errored=0,
+                n_critical_failed=0,
+                message=f"Starting evaluation of {n_total} PDF(s)",
+            )
+        )
 
         downloader = Downloader(
             cache_dir=self.config.paths.cache_dir,
             network=self.config.network,
         )
+        self._emit(
+            ProgressEvent(
+                phase="acquiring",
+                n_total=n_total,
+                n_done=0,
+                n_errored=0,
+                n_critical_failed=0,
+                message="Downloading…",
+            )
+        )
         acquired = await downloader.acquire_many(sources)
 
         reports: list[PdfReport] = []
+        n_errored = 0
+        n_critical_failed = 0
         for src, meta, ap in zip(sources, user_metadata, acquired, strict=True):
-            reports.append(self._evaluate_one(src, ap, meta))
+            report = self._evaluate_one(src, ap, meta)
+            reports.append(report)
+            if report.error:
+                n_errored += 1
+            if report.score.critical_fail:
+                n_critical_failed += 1
+            self._emit(
+                ProgressEvent(
+                    phase="evaluating",
+                    n_total=n_total,
+                    n_done=len(reports),
+                    n_errored=n_errored,
+                    n_critical_failed=n_critical_failed,
+                    current_source=src,
+                    last_grade=report.score.grade,
+                    last_score_pct=report.score.score_pct,
+                )
+            )
 
         _mark_duplicates(reports)
 
         finished = datetime.now(UTC)
+        self._emit(
+            ProgressEvent(
+                phase="finished",
+                n_total=n_total,
+                n_done=len(reports),
+                n_errored=n_errored,
+                n_critical_failed=n_critical_failed,
+                message="Done",
+            )
+        )
         return BatchReport(
             started_at=started,
             finished_at=finished,

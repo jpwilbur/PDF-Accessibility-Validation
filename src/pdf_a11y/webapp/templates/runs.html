@@ -1,0 +1,57 @@
+{% extends "_base.html" %}
+{% block title %}pdf-a11y — run history{% endblock %}
+
+{% block content %}
+<h1>Run history</h1>
+<p class="muted">{{ runs|length }} run(s).</p>
+
+{% if runs %}
+<div class="card" style="padding: 0;">
+  <table id="runsTable">
+    <thead>
+      <tr>
+        <th>Started</th>
+        <th>Label / source</th>
+        <th>Status</th>
+        <th>PDFs</th>
+        <th>Critical fails</th>
+        <th>Errors</th>
+        <th>Finished</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      <tr>
+        <td><code>{{ run.started_at }}</code></td>
+        <td>
+          {% if run.label %}<strong>{{ run.label }}</strong><br>{% endif %}
+          <span class="muted">
+            {% if run.source_kind == 'observepoint' %}
+              ObservePoint #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
+            {% else %}
+              {{ run.source_kind }} ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
+            {% endif %}
+          </span>
+        </td>
+        <td><span class="pill pill-{{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.n_done }}/{{ run.n_total }}</td>
+        <td>{{ run.n_critical_failed }}</td>
+        <td>{{ run.n_errored }}</td>
+        <td>{{ run.finished_at or '—' }}</td>
+        <td>
+          <a href="/runs/{{ run.id }}">open →</a>
+          <form method="post" action="/api/runs/{{ run.id }}/delete" style="display: inline;" onsubmit="return confirm('Delete this run and its outputs?');">
+            <button type="submit" class="btn danger" style="padding: 0.2rem 0.5rem; font-size: 0.85em;">delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">No runs yet. <a href="/">Start one →</a></p>
+{% endif %}
+
+{% endblock %}

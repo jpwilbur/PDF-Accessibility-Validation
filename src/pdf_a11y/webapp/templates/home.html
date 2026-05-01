@@ -1,0 +1,194 @@
+{% extends "_base.html" %}
+{% block title %}pdf-a11y — start a new run{% endblock %}
+
+{% block content %}
+
+<h1>Run a new accessibility evaluation</h1>
+<p class="muted">Either pull URLs from an ObservePoint saved report or paste them in directly. Each PDF is downloaded, evaluated, and scored independently. Non-PDF responses are recorded with an error and don't count toward findings.</p>
+
+<div class="card">
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="op" type="button" role="tab" aria-selected="true">ObservePoint saved report</button>
+    <button class="tab" data-tab="manual" type="button" role="tab" aria-selected="false">Paste URLs / paths</button>
+  </div>
+
+  <form id="runForm" autocomplete="off">
+    <div class="tab-panel active" id="tab-op">
+      <input type="hidden" name="source" value="observepoint">
+      <div class="field-row">
+        <div>
+          <label for="op_api_key">ObservePoint API key</label>
+          <input type="password" id="op_api_key" name="op_api_key" value="{{ settings.op_api_key }}" placeholder="paste your API key" required>
+          <div class="muted">From <a href="https://app.observepoint.com/my-profile" target="_blank" rel="noopener">app.observepoint.com/my-profile</a>.</div>
+        </div>
+        <div>
+          <label for="op_report_id">Saved report ID</label>
+          <input type="text" id="op_report_id" name="op_report_id" value="{{ settings.last_op_report_id }}" placeholder="e.g. 12345" required>
+          <div class="muted">The saved report MUST expose a <code>LINK_URL</code> column.</div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div style="flex: 0 0 200px;">
+          <label for="concurrency_op">Concurrency</label>
+          <input type="number" id="concurrency_op" name="concurrency" min="1" max="20" value="{{ settings.last_concurrency or 3 }}">
+        </div>
+        <div style="flex: 1 1 auto; align-self: end;">
+          <label><input type="checkbox" name="save_settings_flag" value="true" checked> Remember API key + report ID on this machine</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-manual">
+      <input type="hidden" name="source-disabled" value="manual">
+      <label for="urls">URLs and/or local paths (one per line)</label>
+      <textarea id="urls" name="urls" placeholder="https://example.gov/a.pdf
+https://example.gov/b.pdf
+/Users/me/Documents/sample.pdf"></textarea>
+      <div class="field-row">
+        <div style="flex: 0 0 200px;">
+          <label for="concurrency_manual">Concurrency</label>
+          <input type="number" id="concurrency_manual" name="concurrency" min="1" max="20" value="3">
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 1rem;">
+      <button type="submit" class="btn" id="goBtn">Start run</button>
+      <span class="muted" id="formError" style="margin-left: 1rem; color: var(--bad);"></span>
+    </div>
+  </form>
+</div>
+
+<h2>System dependencies</h2>
+<div class="card">
+  <p class="muted">pdf-a11y wraps several external tools. Missing tools cause specific check categories to be skipped — the run still completes.</p>
+  <div class="dep-list">
+    <div class="dep {{ 'ok' if deps.verapdf.ok else 'bad' }}">
+      <div class="name">veraPDF {{ '✓' if deps.verapdf.ok else '✗ missing' }}</div>
+      <div class="path">{{ deps.verapdf.path or 'PDF/UA-1 conformance checks will be skipped.' }}</div>
+    </div>
+    <div class="dep {{ 'ok' if deps.java.ok else 'bad' }}">
+      <div class="name">Java {{ '✓' if deps.java.ok else '✗ missing' }}</div>
+      <div class="path">{{ deps.java.path or 'Required by veraPDF.' }}</div>
+    </div>
+    <div class="dep {{ 'ok' if deps.tesseract.ok else 'bad' }}">
+      <div class="name">Tesseract {{ '✓' if deps.tesseract.ok else '✗ missing' }}</div>
+      <div class="path">{{ deps.tesseract.path or 'Scan-only PDF detection will be heuristic without OCR confirmation.' }}</div>
+    </div>
+  </div>
+  {% if not (deps.verapdf.ok and deps.java.ok and deps.tesseract.ok) %}
+  <p style="margin: 0.75rem 0 0;" class="muted">
+    <strong>Install instructions.</strong>
+    {% if deps.platform == 'darwin' %}
+      <code>brew install verapdf openjdk tesseract</code>
+    {% elif deps.platform == 'win32' %}
+      Run <code>bootstrap.ps1</code> from the project repo, or use winget: <code>winget install EclipseAdoptium.Temurin.21.JDK</code>, <code>winget install UB-Mannheim.TesseractOCR</code>, and <a href="https://github.com/veraPDF/veraPDF-apps/releases" target="_blank" rel="noopener">download veraPDF</a>.
+    {% else %}
+      <code>sudo apt install openjdk-21-jre tesseract-ocr</code> and <a href="https://github.com/veraPDF/veraPDF-apps/releases" target="_blank" rel="noopener">download veraPDF</a>.
+    {% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<h2>Recent runs</h2>
+{% if recent_runs %}
+<div class="card" style="padding: 0;">
+  <table>
+    <thead>
+      <tr>
+        <th>Started</th>
+        <th>Source</th>
+        <th>Status</th>
+        <th>PDFs</th>
+        <th>Critical fails</th>
+        <th>Errors</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in recent_runs %}
+      <tr>
+        <td>{{ run.started_at }}</td>
+        <td>
+          {% if run.source_kind == 'observepoint' %}
+            ObservePoint #{{ run.source_meta.report_id }}
+            {% if run.source_meta.report_name %}<br><span class="muted">{{ run.source_meta.report_name }}</span>{% endif %}
+          {% else %}
+            {{ run.source_kind }}
+          {% endif %}
+        </td>
+        <td><span class="pill pill-{{ run.status }}">{{ run.status }}</span></td>
+        <td>{{ run.n_done }}/{{ run.n_total }}</td>
+        <td>{{ run.n_critical_failed }}</td>
+        <td>{{ run.n_errored }}</td>
+        <td><a href="/runs/{{ run.id }}">open →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted"><a href="/runs">View all runs →</a></p>
+{% else %}
+<p class="muted">No runs yet. Start one above.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.tab-panel');
+  var hiddenSource = document.querySelector('input[name="source"]');
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      tabs.forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      panels.forEach(function(p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      var name = tab.dataset.tab;
+      document.getElementById('tab-' + name).classList.add('active');
+      hiddenSource.value = (name === 'op') ? 'observepoint' : 'manual';
+    });
+  });
+
+  var form = document.getElementById('runForm');
+  var btn = document.getElementById('goBtn');
+  var err = document.getElementById('formError');
+  form.addEventListener('submit', function(ev) {
+    ev.preventDefault();
+    err.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Starting…';
+
+    var formData = new FormData(form);
+    // Strip irrelevant fields based on which tab is active.
+    var source = hiddenSource.value;
+    if (source === 'observepoint') {
+      formData.delete('urls');
+      formData.delete('source-disabled');
+    } else {
+      formData.delete('op_api_key');
+      formData.delete('op_report_id');
+      formData.delete('save_settings_flag');
+    }
+    formData.set('source', source);
+    // Concurrency: which one is in the active panel?
+    var activePanel = document.querySelector('.tab-panel.active');
+    var conc = activePanel.querySelector('input[name="concurrency"]');
+    if (conc) formData.set('concurrency', conc.value);
+    fetch('/api/runs', { method: 'POST', body: formData })
+      .then(function(r) {
+        if (!r.ok) return r.json().then(function(j) { throw new Error(j.detail || 'Request failed'); });
+        return r.json();
+      })
+      .then(function(j) { window.location.href = j.redirect; })
+      .catch(function(e) {
+        err.textContent = e.message || String(e);
+        btn.disabled = false;
+        btn.textContent = 'Start run';
+      });
+  });
+})();
+</script>
+{% endblock %}

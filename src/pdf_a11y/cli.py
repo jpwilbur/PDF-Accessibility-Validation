@@ -165,6 +165,34 @@ def evaluate(
     console.print(f"\nReports written to [bold]{output_dir.resolve()}[/bold]")
 
 
+@app.command()
+def serve(
+    host: Annotated[str, typer.Option("--host", help="Bind address.")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="HTTP port.")] = 8765,
+    no_open: Annotated[
+        bool, typer.Option("--no-open", help="Don't auto-open the browser.")
+    ] = False,
+) -> None:
+    """Run the local web app for kicking off PDF evaluations and reviewing history."""
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from pdf_a11y.webapp import create_app
+
+    web_app = create_app()
+    url = f"http://{host}:{port}/"
+    console.print(f"[bold green]pdf-a11y[/bold green] is running at [bold]{url}[/bold]")
+    console.print("Press Ctrl+C to stop.")
+
+    if not no_open:
+        # Delay slightly so the server is up before the browser asks.
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+
+    uvicorn.run(web_app, host=host, port=port, log_level="warning")
+
+
 @app.command("gen-docs")
 def gen_docs(
     docs_dir: Annotated[
