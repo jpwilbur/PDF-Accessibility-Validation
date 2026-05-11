@@ -114,6 +114,40 @@ tbody tr.errored-row { background: #fef9ef; }
 tbody tr.errored-row:hover { background: #fdf3dc; }
 tbody tr.errored-row td { color: #7a4a00; }
 
+/* "Document" cell — the entire title is the primary affordance for
+   opening the per-PDF report. Visually treated as a link so users
+   don't have to scroll the wide table to find a separate "view"
+   column at the far right. */
+.doc-link {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+  padding-bottom: 1px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.doc-link strong { color: inherit; font-size: 1.02em; }
+.doc-link .doc-link-arrow {
+  color: var(--muted);
+  font-size: 0.85em;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.doc-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.doc-link:hover .doc-link-arrow {
+  color: var(--accent);
+  transform: translate(2px, -2px);
+}
+.doc-link:focus {
+  outline: 3px solid #ffbf00;
+  outline-offset: 2px;
+  border-bottom-color: transparent;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;

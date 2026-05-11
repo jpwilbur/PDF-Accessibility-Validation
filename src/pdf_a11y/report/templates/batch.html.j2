@@ -60,7 +60,7 @@
     <tr>
       <th><button type="button" data-sort="grade">Grade</button></th>
       <th><button type="button" data-sort="score">Score</button></th>
-      <th>Document</th>
+      <th>Document <span class="muted" style="font-weight:400;">— click to open report</span></th>
       <th><button type="button" data-sort="pages">Pages</button></th>
       <th><button type="button" data-sort="size">Size (MB)</button></th>
       <th>Tagged</th>
@@ -76,7 +76,6 @@
       <th>Producer</th>
       <th><button type="button" data-sort="modified">Last modified</button></th>
       <th>Top issues</th>
-      <th>Report</th>
     </tr>
   </thead>
   <tbody>
@@ -105,8 +104,18 @@
         <td><span class="grade {{ r.score.grade | grade_class }}" style="width:2rem;height:2rem;font-size:1rem">{{ r.score.grade }}</span></td>
         <td>{{ '%.1f' | format(r.score.score_pct) }}</td>
         <td>
-          <strong>{{ m.title or m.source }}</strong><br>
-          <span class="muted"><a href="{{ m.source }}">{{ m.source }}</a></span>
+          {% if row.link and not r.error %}
+            <a class="doc-link" href="{{ row.link }}">
+              <strong>{{ m.title or m.source }}</strong>
+              <span class="doc-link-arrow" aria-hidden="true">↗</span>
+            </a>
+          {% else %}
+            <strong>{{ m.title or m.source }}</strong>
+          {% endif %}
+          <br>
+          <span class="muted">
+            source: <a href="{{ m.source }}" target="_blank" rel="noopener">{{ m.source }}</a>
+          </span>
         </td>
         <td>{{ m.page_count or '—' }}</td>
         <td>{{ '%.2f' | format(m.byte_size_mb) }}</td>
@@ -123,7 +132,6 @@
         <td><span class="muted">{{ (m.producer or '—')[:40] }}</span></td>
         <td>{{ m.modification_date or '—' }}</td>
         <td>{{ row.top }}</td>
-        <td>{% if row.link %}<a href="{{ row.link }}">view</a>{% else %}—{% endif %}</td>
       </tr>
     {% endfor %}
   </tbody>
