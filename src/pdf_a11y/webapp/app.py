@@ -18,6 +18,8 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import PlainTextResponse
 
 from pdf_a11y import __version__, paths
 from pdf_a11y.runs import (
@@ -29,6 +31,41 @@ from pdf_a11y.webapp.runner import ProgressBus, RunRunner
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
+
+
+_ALLOWED_HOST_HOSTNAMES: set[str] = {
+    "127.0.0.1",
+    "localhost",
+    "::1",
+    "[::1]",
+    # TestClient's default Host. No real browser ever sends this, so it
+    # doesn't widen the production attack surface.
+    "testserver",
+}
+
+
+class _HostAllowlistMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose `Host` header isn't a loopback name.
+
+    Defends against DNS rebinding: a page on evil.com that resolves its
+    hostname to 127.0.0.1 can otherwise be treated as same-origin by the
+    browser and read responses from our local server, leaking the saved
+    API key rendered in the home form. We require the Host header to be
+    one of the loopback names; DNS-rebound requests carry the attacker's
+    hostname instead.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
+        host_header = request.headers.get("host", "")
+        # Strip port for comparison.
+        hostname = host_header.split(":", 1)[0].lower()
+        if hostname and hostname not in _ALLOWED_HOST_HOSTNAMES:
+            return PlainTextResponse(
+                "Host not allowed. ObservePoint PDF Validation only accepts requests "
+                "via 127.0.0.1 or localhost to defend against DNS rebinding.",
+                status_code=421,
+            )
+        return await call_next(request)
 
 
 def create_app() -> FastAPI:
@@ -43,6 +80,7 @@ def create_app() -> FastAPI:
         description="Local PDF accessibility evaluator",
         version=__version__,
     )
+    app.add_middleware(_HostAllowlistMiddleware)
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
     # ---- pages -------------------------------------------------------
@@ -174,10 +212,16 @@ def create_app() -> FastAPI:
         rec = store.get(run_id)
         if rec is None:
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
-        # Prevent path traversal.
+        # Prevent path traversal. Use `is_relative_to` (not str.startswith)
+        # so a sibling run-id that shares a prefix can't be reached:
+        # e.g., output_dir=/runs/abc and target=/runs/abc-def/x would have
+        # been falsely allowed by startswith.
+        root = rec.output_path.resolve()
         target = (rec.output_path / file_path).resolve()
-        if not str(target).startswith(str(rec.output_path.resolve())):
-            raise HTTPException(status_code=400, detail="Invalid path")
+        try:
+            target.relative_to(root)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid path") from None
         if not target.exists() or not target.is_file():
             raise HTTPException(status_code=404, detail="File not found")
         from fastapi.responses import FileResponse
