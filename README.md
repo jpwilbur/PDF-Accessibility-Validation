@@ -10,8 +10,6 @@ document.
 Everything runs on your laptop. No cloud, no extra account, no data
 leaves your machine.
 
-![A screenshot would go here — open it once installed.](#)
-
 ---
 
 ## Before you start
