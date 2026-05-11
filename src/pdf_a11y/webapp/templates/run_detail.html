@@ -3,9 +3,11 @@
 
 {% block content %}
 
+{% set is_done = run.status == 'done' %}
+
 <div class="card elevated" id="runHero">
-  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-    <div>
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:1.5rem; flex-wrap:wrap;">
+    <div style="flex:1 1 280px; min-width:0;">
       <h1 style="margin-bottom:0.35rem;">
         Run
         <span class="pill pill-{{ run.status }}" id="statusPill">{{ run.status }}</span>
@@ -15,17 +17,25 @@
         ID <code>{{ run.id }}</code> · started {{ run.started_at }}
         {% if run.finished_at %} · finished {{ run.finished_at }}{% endif %}
       </p>
-    </div>
-    <div style="text-align:right;">
-      <div class="muted" style="font-size:0.78em; text-transform:uppercase; letter-spacing:0.05em; font-weight:600;">Source</div>
-      <div style="font-weight:600; font-size:0.95rem;">
+      <p class="muted" style="margin:0.4rem 0 0; font-size:0.85em;">
+        <strong style="color:var(--fg-soft);">Source:</strong>
         {% if run.source_kind == 'observepoint' %}
-          ObservePoint #{{ run.source_meta.report_id }}
-          {% if run.source_meta.report_name %}<br><span class="muted" style="font-weight:400;">{{ run.source_meta.report_name }}</span>{% endif %}
+          ObservePoint #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
         {% else %}
           Manual ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
         {% endif %}
-      </div>
+      </p>
+    </div>
+    {# Primary CTA: jump to the report on the same page + open in new tab.
+       Hidden until summary.html exists; the SSE handler reveals it when
+       the run finishes live. #}
+    <div id="viewReportActions" style="display:{{ 'flex' if summary_exists else 'none' }}; gap:0.5rem; flex-wrap:wrap;">
+      <a href="#reportFrame" class="btn" id="viewReportBtn" style="font-size:0.95rem; padding:0.65rem 1.4rem;">
+        ↓ View report
+      </a>
+      <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener" class="btn secondary" style="font-size:0.95rem; padding:0.65rem 1.4rem;">
+        ↗ Open in new tab
+      </a>
     </div>
   </div>
 
@@ -56,22 +66,21 @@
     </div>
   </div>
 
-  {# Phase strip #}
-  <div class="phases" id="phaseStrip" aria-label="Run phases">
-    <span class="phase" data-phase="starting"><span class="dot"></span>Starting</span>
-    <span class="phase" data-phase="acquiring"><span class="dot"></span>Downloading</span>
-    <span class="phase" data-phase="evaluating"><span class="dot"></span>Evaluating</span>
-    <span class="phase" data-phase="done"><span class="dot"></span>Done</span>
+  {# Live progress UI — hidden once the run is done. For completed runs
+     the phase strip is all green and the bar is at 100%; they're noise. #}
+  <div id="liveProgress" style="display:{{ 'none' if is_done else 'block' }};">
+    <div class="phases" id="phaseStrip" aria-label="Run phases">
+      <span class="phase" data-phase="starting"><span class="dot"></span>Starting</span>
+      <span class="phase" data-phase="acquiring"><span class="dot"></span>Downloading</span>
+      <span class="phase" data-phase="evaluating"><span class="dot"></span>Evaluating</span>
+      <span class="phase" data-phase="done"><span class="dot"></span>Done</span>
+    </div>
+    <div class="progress idle" id="progressBox">
+      <div class="bar" id="progressBar" style="width: {{ run.progress_pct }}%;"></div>
+      <div class="label" id="progressLabel">{{ run.progress_pct }}%</div>
+    </div>
+    <p class="now-scanning" id="nowScanning">Waiting for first PDF…</p>
   </div>
-
-  {# Progress bar + currently-scanning #}
-  <div class="progress idle" id="progressBox">
-    <div class="bar" id="progressBar" style="width: {{ run.progress_pct }}%;"></div>
-    <div class="label" id="progressLabel">{{ run.progress_pct }}%</div>
-  </div>
-  <p class="now-scanning" id="nowScanning">
-    {% if run.status == 'done' %}<strong>Run complete.</strong>{% else %}Waiting for first PDF…{% endif %}
-  </p>
 
   {% if run.error %}
   <div style="margin-top:1rem; padding:0.85rem 1rem; background:var(--bad-bg); color:var(--crit-fg); border:1px solid #FECACA; border-radius:var(--radius-sm); font-size:0.92rem;">
@@ -79,6 +88,28 @@
   </div>
   {% endif %}
 </div>
+
+{# Report — placed prominently right after the hero so anyone opening a
+   completed run lands on it. Renders a placeholder while a run is still
+   in progress; the SSE handler swaps in the iframe when 'done' fires. #}
+{% if summary_exists %}
+<div id="reportSection">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin:1.75rem 0 0.5rem;">
+    <h2 style="margin:0;" id="reportHeading">Accessibility report</h2>
+    <p class="muted" style="margin:0;" id="reportLinks">
+      <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener">Open in new tab ↗</a> ·
+      <a href="/runs/{{ run.id }}/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> ·
+      <a href="/runs/{{ run.id }}/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>
+    </p>
+  </div>
+  <iframe class="report" id="reportFrame" src="/runs/{{ run.id }}/report/summary.html" title="Run summary report"></iframe>
+</div>
+{% else %}
+<div id="reportPlaceholder" class="card muted" style="text-align:center; padding:2.5rem 1.5rem; margin-top:1.5rem;">
+  <div style="font-size:1.05rem; font-weight:600; color:var(--fg-soft);">Report builds when the run finishes</div>
+  <div style="margin-top:0.4rem;">Watch the progress above. The full report will appear here automatically — no refresh needed.</div>
+</div>
+{% endif %}
 
 <h2>Grade distribution</h2>
 <div class="card flat" style="padding:0.85rem 1rem;">
@@ -95,30 +126,18 @@
 </div>
 
 <h2>Activity</h2>
-<details class="card flat" id="activityCard" {% if run.status != 'done' %}open{% endif %}>
+<details class="card flat" id="activityCard" {% if not is_done %}open{% endif %}>
   <summary style="font-weight:600; cursor:pointer; user-select:none; margin-bottom:0.5rem;">Live activity log</summary>
   <div class="event-log" id="eventLog" aria-live="polite"></div>
 </details>
-
-{% if summary_exists %}
-<h2 style="margin-top:1.5rem;" id="reportHeading">Report</h2>
-<p class="muted" id="reportLinks">
-  <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener">Open in a new tab</a> ·
-  <a href="/runs/{{ run.id }}/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> ·
-  <a href="/runs/{{ run.id }}/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>
-</p>
-<iframe class="report" id="reportFrame" src="/runs/{{ run.id }}/report/summary.html" title="Run summary report"></iframe>
-{% else %}
-<div id="reportPlaceholder" class="card muted" style="text-align:center; padding:1.5rem;">
-  Report files will appear here when the run finishes.
-</div>
-{% endif %}
 {% endblock %}
 
 {% block scripts %}
+{% set is_done = run.status == 'done' %}
 <script>
 (function() {
   var runId = {{ run.id | tojson }};
+  var initiallyDone = {{ 'true' if is_done else 'false' }};
   var statusPill = document.getElementById('statusPill');
   var bar = document.getElementById('progressBar');
   var progressBox = document.getElementById('progressBox');
@@ -239,26 +258,58 @@
   function renderReport() {
     if (hasReport) return;
     hasReport = true;
-    var heading = document.getElementById('reportHeading');
-    if (!heading) {
-      heading = document.createElement('h2');
-      heading.id = 'reportHeading';
-      heading.style.marginTop = '1.5rem';
-      heading.textContent = 'Report';
-      placeholder.parentNode.insertBefore(heading, placeholder);
-    }
-    var meta = document.createElement('p');
-    meta.id = 'reportLinks';
-    meta.className = 'muted';
-    meta.innerHTML = '<a href="/runs/' + runId + '/report/summary.html" target="_blank" rel="noopener">Open in a new tab</a> · <a href="/runs/' + runId + '/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> · <a href="/runs/' + runId + '/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>';
+
+    // Build the report section block (heading + links + iframe) and swap in
+    // for the placeholder. Matches the server-rendered layout in
+    // run_detail.html for completed runs.
+    var section = document.createElement('div');
+    section.id = 'reportSection';
+    section.innerHTML =
+      '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin:1.75rem 0 0.5rem;">' +
+      '  <h2 style="margin:0;" id="reportHeading">Accessibility report</h2>' +
+      '  <p class="muted" style="margin:0;" id="reportLinks">' +
+      '    <a href="/runs/' + runId + '/report/summary.html" target="_blank" rel="noopener">Open in new tab ↗</a> · ' +
+      '    <a href="/runs/' + runId + '/report/findings.jsonl" target="_blank" rel="noopener">findings.jsonl</a> · ' +
+      '    <a href="/runs/' + runId + '/report/summary.csv" target="_blank" rel="noopener">summary.csv</a>' +
+      '  </p>' +
+      '</div>';
     var frame = document.createElement('iframe');
     frame.className = 'report';
     frame.id = 'reportFrame';
     frame.src = '/runs/' + runId + '/report/summary.html?t=' + Date.now();
-    if (placeholder) {
-      placeholder.replaceWith(meta);
-      meta.parentNode.insertBefore(frame, meta.nextSibling);
-    }
+    section.appendChild(frame);
+
+    if (placeholder) placeholder.replaceWith(section);
+
+    // Reveal the hero CTA buttons (jump to report + open in new tab) and
+    // wire the in-tab anchor links since the iframe didn't exist at page-
+    // load time for live-finishing runs.
+    var actions = document.getElementById('viewReportActions');
+    if (actions) actions.style.display = 'flex';
+    // Hide the now-stale phase strip + progress bar.
+    var live = document.getElementById('liveProgress');
+    if (live) live.style.display = 'none';
+    // Smooth-scroll to the report so the user immediately sees it.
+    setTimeout(function() {
+      var el = document.getElementById('reportFrame');
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 300);
+  }
+
+  // On a page load where the run is ALREADY done (e.g. someone opening a
+  // shared link, or a refresh after completion), scroll the report into
+  // view automatically so it's the focus instead of stale status UI.
+  if (hasReport && initiallyDone) {
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var el = document.getElementById('reportFrame');
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    });
   }
 
   // EventSource subscription
