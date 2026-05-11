@@ -1,19 +1,54 @@
+# --- Python build / env -------------------------------------------------
 .venv/
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+dist/
+build/
+
+# --- Test / lint caches -------------------------------------------------
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
-dist/
-build/
-*.egg-info/
-.DS_Store
-.env
 
-# project caches & outputs (anchored to project root only)
+# --- OS junk -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --- IDE / editor (user-specific) ---------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Secrets / credentials (defence in depth) ---------------------------
+# The app stores API keys under ~/Library/Application Support/pdf-a11y/
+# (platformdirs user-data dir) — never inside the repo. These globs
+# cover the common slip-ups if someone copies a credentials file in by
+# mistake.
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+*-credentials.json
+secrets.yaml
+secrets.json
+# pdf-a11y's settings file holds the OP API key in plaintext under
+# platformdirs; ignore at repo root as a safety net in case anyone
+# copies it in.
+/settings.json
+settings.local.json
+
+# --- Project caches & outputs (anchored to project root only) -----------
 /.cache/
 /reports/
-# runtime run output goes under ~/.pdf-a11y/ (platformdirs), not the repo
+# Runtime run output (runs.db, runs/<id>/, cache/, settings.json) lives
+# under ~/Library/Application Support/pdf-a11y/ — outside the repo by
+# design — but this anchor is a safety net for anyone passing
+# --output-dir ./runs or similar.
+/runs/
