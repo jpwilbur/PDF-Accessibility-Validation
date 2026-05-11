@@ -314,6 +314,18 @@ def _write_outputs(batch, output_dir: Path) -> None:  # type: ignore[no-untyped-
     )
     write_findings_jsonl(batch, output_dir / "findings.jsonl")
     write_summary_csv(batch, output_dir / "summary.csv")
+
+    # Grade distribution — written here so the run-detail page can re-hydrate
+    # the chart on refresh. We exclude errored (non-PDF) reports for the same
+    # reason the live UI does: those URLs aren't real PDFs and shouldn't
+    # appear in any grade bucket.
+    grade_counts = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+    for r in batch.reports:
+        if r.error:
+            continue
+        if r.score.grade in grade_counts:
+            grade_counts[r.score.grade] += 1
+
     (output_dir / "batch.json").write_text(
         json.dumps(
             {
@@ -322,6 +334,7 @@ def _write_outputs(batch, output_dir: Path) -> None:  # type: ignore[no-untyped-
                 "total": batch.total,
                 "errored": batch.errored,
                 "critical_failed": batch.critical_failed,
+                "grade_counts": grade_counts,
             },
             indent=2,
         ),

@@ -120,12 +120,18 @@ def create_app() -> FastAPI:
         if rec is None:
             raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
         summary_exists = (rec.output_path / "summary.html").exists()
+        # Re-hydrate the grade distribution from batch.json so a refresh after
+        # the run finishes doesn't reset every cell to zero. The JS still
+        # increments these counts live during a run; this is the persisted
+        # final state.
+        grade_counts = _load_grade_counts(rec.output_path)
         return templates.TemplateResponse(
             request,
             "run_detail.html",
             {
                 "run": rec,
                 "summary_exists": summary_exists,
+                "grade_counts": grade_counts,
                 "app_version": __version__,
             },
         )
@@ -234,6 +240,22 @@ def create_app() -> FastAPI:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _load_grade_counts(output_dir: Path) -> dict[str, int]:
+    """Read the persisted A-F counts from a run's batch.json (if it exists)."""
+    empty = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
+    batch_json = output_dir / "batch.json"
+    if not batch_json.exists():
+        return empty
+    try:
+        data = json.loads(batch_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return empty
+    raw = data.get("grade_counts")
+    if not isinstance(raw, dict):
+        return empty
+    return {g: int(raw.get(g, 0)) for g in empty}
 
 
 def _persist_settings(**kwargs: Any) -> None:

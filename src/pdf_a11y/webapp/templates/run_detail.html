@@ -82,12 +82,13 @@
 
 <h2>Grade distribution</h2>
 <div class="card flat" style="padding:0.85rem 1rem;">
-  <div class="grade-dist" id="gradeDist">
+  <div class="grade-dist" id="gradeDist" data-initial-counts="{{ grade_counts | tojson | e }}">
     {% for g in ['A','B','C','D','F'] %}
-    <div class="grade-cell {{ g }}" data-grade="{{ g }}">
-      <div class="gletter">{{ g }}</div>
-      <div class="gcount" data-count="0">0</div>
-    </div>
+      {% set n = grade_counts[g] %}
+      <div class="grade-cell {{ g }} {{ 'has' if n > 0 else '' }}" data-grade="{{ g }}">
+        <div class="gletter">{{ g }}</div>
+        <div class="gcount" data-count="{{ n }}">{{ n }}</div>
+      </div>
     {% endfor %}
   </div>
   <div class="muted" style="margin-top:0.5rem; font-size:0.83em;">Updates as each PDF finishes.</div>
@@ -142,8 +143,21 @@
   });
   var phaseOrder = ['starting','acquiring','evaluating','done'];
 
-  // Grade distribution counts (kept in sync with the live event stream)
+  // Grade distribution counts. Seed from the server-rendered initial values
+  // (which come from the run's batch.json) so a page refresh after the run
+  // finishes doesn't reset all cells to zero. Future SSE events will still
+  // increment these correctly mid-run.
   var gradeCounts = {A:0, B:0, C:0, D:0, F:0};
+  (function seedFromDom() {
+    var el = document.getElementById('gradeDist');
+    if (!el) return;
+    try {
+      var initial = JSON.parse(el.dataset.initialCounts || '{}');
+      Object.keys(gradeCounts).forEach(function(g) {
+        if (typeof initial[g] === 'number') gradeCounts[g] = initial[g];
+      });
+    } catch (e) { /* fall through with zeros */ }
+  })();
   function refreshGradeDist() {
     Object.keys(gradeCounts).forEach(function(g) {
       var cell = document.querySelector('.grade-cell[data-grade="'+g+'"]');
