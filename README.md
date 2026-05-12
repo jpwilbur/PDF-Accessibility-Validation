@@ -40,8 +40,10 @@ before pasting the next one.
 ### 2. System tools
 
 ```bash
-brew install uv openjdk verapdf tesseract
+brew install uv openjdk verapdf tesseract pango glib cairo
 ```
+
+(`pango`, `glib`, and `cairo` are needed for the PDF download feature.)
 
 ### 3. The app itself
 
@@ -83,6 +85,17 @@ veraPDF doesn't ship a winget package. Download the installer:
 Pick the "veraPDF-installer-X.Y.Z.zip" asset, unzip it, then
 double-click `verapdf-install.bat`. Accept the defaults — the
 installer puts `verapdf` on your PATH.
+
+### 2a. GTK runtime (only if you want PDF downloads)
+
+PDF downloads (per-PDF reports, executive summary, comprehensive PDF)
+use WeasyPrint, which needs the GTK runtime. Download and run:
+
+<https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases/latest>
+
+Pick the "gtk3-runtime-X.Y.Z-...-setup.exe" asset. Accept the
+defaults. **Without this, the app still works — but the "Download
+PDF" buttons will return a 500 error.**
 
 ### 3. Re-open PowerShell
 

@@ -1,0 +1,34 @@
+{# Comprehensive PDF: executive summary, then each per-PDF report inline,
+   separated by section title bars. Renders one big document that's
+   useful to share/archive a complete run. #}
+
+{# Executive summary content as front matter. #}
+{% include "executive.html.j2" %}
+
+<h2 class="page-break-before">All evaluated documents</h2>
+<p class="muted" style="font-size:0.85em;">{{ batch.total - batch.errored }} PDFs evaluated; {{ batch.errored }} non-PDF URLs are listed at the end.</p>
+
+{% for r in reports %}
+<section class="pdf-report-section">
+  <h2 class="section-title doc-title-hidden">{{ loop.index }}. {{ r.metadata.title or r.metadata.source }}</h2>
+  {% include "_per_pdf_inline.html.j2" %}
+</section>
+{% endfor %}
+
+{% if errored_reports %}
+<section class="page-break-before">
+  <h2>URLs that did not return a valid PDF ({{ errored_reports | length }})</h2>
+  <p class="muted">These rows were skipped — they returned HTML, redirects, 404s, or timed out. They are not counted in the grade distribution or per-PDF scoring.</p>
+  <table class="no-break-inside">
+    <thead><tr><th>URL</th><th>Error</th></tr></thead>
+    <tbody>
+      {% for r in errored_reports %}
+      <tr>
+        <td><span class="muted" style="font-size:0.82em;">{{ r.metadata.source }}</span></td>
+        <td style="font-size:0.82em;">{{ r.error or '(no detail)' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}

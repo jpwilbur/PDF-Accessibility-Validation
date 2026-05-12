@@ -148,6 +148,15 @@ tbody tr.errored-row td { color: #7a4a00; }
   border-bottom-color: transparent;
 }
 
+a.pdf-dl {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted transparent;
+  font-weight: 500;
+  white-space: nowrap;
+}
+a.pdf-dl:hover { border-bottom-color: var(--accent); }
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;

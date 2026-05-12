@@ -1,0 +1,116 @@
+{# Executive summary PDF — run-level overview.
+
+   Used both as a standalone PDF (executive.pdf) and as the front matter of
+   the comprehensive PDF. When in standalone mode the file is wrapped by
+   pdf_export._wrap_for_print; when included it expects the wrapper around
+   it to do the same.
+#}
+
+<div class="cover doc-title-hidden">
+  <span class="brand-mark">ObservePoint <em>PDF</em> Validation</span>
+  <h1>Executive Summary</h1>
+  <p class="cover-sub">{{ run_label }}</p>
+  <dl class="cover-meta">
+    <dt>Source</dt>
+    <dd>{{ source_summary }}</dd>
+    <dt>Run started</dt>
+    <dd>{{ batch.started_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+    <dt>Run finished</dt>
+    <dd>{{ batch.finished_at.strftime('%Y-%m-%d %H:%M UTC') }}</dd>
+    <dt>Tooling</dt>
+    <dd>pdf-a11y {{ batch.tool_versions.pdf_a11y }} · veraPDF {{ batch.tool_versions.verapdf or '—' }}</dd>
+  </dl>
+</div>
+
+<h2 style="margin-top:0;">Overview</h2>
+<div class="exec-stats">
+  <div class="exec-stat brand">
+    <div class="lbl">URLs submitted</div>
+    <div class="val">{{ batch.total }}</div>
+    <div class="sub">total inputs to this run</div>
+  </div>
+  <div class="exec-stat success">
+    <div class="lbl">PDFs evaluated</div>
+    <div class="val">{{ batch.total - batch.errored }}</div>
+    <div class="sub">URLs that returned a valid PDF</div>
+  </div>
+  <div class="exec-stat danger">
+    <div class="lbl">Critical fails</div>
+    <div class="val">{{ batch.critical_failed }}</div>
+    <div class="sub">untagged · scan-only · AT-blocking encryption</div>
+  </div>
+  <div class="exec-stat warn">
+    <div class="lbl">Non-PDF URLs</div>
+    <div class="val">{{ batch.errored }}</div>
+    <div class="sub">404, redirect, HTML, timeout — skipped</div>
+  </div>
+</div>
+
+<h2>Grade distribution</h2>
+{% if grade_total > 0 %}
+<div class="exec-grades no-break-inside">
+  {% for g in ['A','B','C','D','F'] %}
+    {% set n = grade_counts[g] %}
+    {% set pct = (n / grade_total * 100) if grade_total else 0 %}
+    <div class="exec-grade-row grade-{{ g }}">
+      <span class="glabel">{{ g }}</span>
+      <div class="gbar"><div class="gfill" style="width: {{ pct }}%;"></div></div>
+      <span class="gn">{{ n }} ({{ '%.0f' | format(pct) }}%)</span>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No PDFs were evaluated, so there is no grade distribution.</p>
+{% endif %}
+
+<h2>Documents that need attention first</h2>
+{% if worst_docs %}
+<table class="no-break-inside">
+  <thead>
+    <tr><th style="width: 3rem;">Grade</th><th>Document</th><th>Findings</th></tr>
+  </thead>
+  <tbody>
+    {% for r in worst_docs %}
+    <tr>
+      <td><span class="grade {{ r.score.grade | grade_class }}">{{ r.score.grade }}</span></td>
+      <td>
+        <strong>{{ r.metadata.title or r.metadata.source }}</strong><br>
+        <span class="muted" style="font-size:0.85em;">{{ r.metadata.source }}</span>
+      </td>
+      <td style="font-size:0.85em;">
+        {% set tops = r.top_findings %}
+        {% if tops %}
+          {% for f in tops[:3] %}
+            <strong>{{ f.check_id }}</strong> — {{ f.message[:90] }}{% if not loop.last %}<br>{% endif %}
+          {% endfor %}
+        {% else %}
+          No specific findings recorded.
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No documents in this run had findings that warranted listing.</p>
+{% endif %}
+
+<h2>Most common issues across the batch</h2>
+{% if top_check_ids %}
+<table class="no-break-inside">
+  <thead>
+    <tr><th style="width: 8rem;">Check</th><th>Description</th><th style="width: 4rem; text-align:right;">Hits</th></tr>
+  </thead>
+  <tbody>
+    {% for row in top_check_ids %}
+    <tr>
+      <td><strong>{{ row.check_id }}</strong></td>
+      <td style="font-size: 0.85em;">{{ row.message }}</td>
+      <td style="text-align:right; font-variant-numeric: tabular-nums;">{{ row.count }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No findings to aggregate.</p>
+{% endif %}

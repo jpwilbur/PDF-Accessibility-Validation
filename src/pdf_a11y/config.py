@@ -92,6 +92,34 @@ class Config:
             os.environ["PATH"] = f"{self.java_home}{sep}{current}"
 
 
+def ensure_weasyprint_libs_on_path() -> None:
+    """Set DYLD_FALLBACK_LIBRARY_PATH on macOS so WeasyPrint finds Homebrew
+    native libs (glib / gobject / pango / cairo).
+
+    Without this, `import weasyprint` raises OSError("cannot load library
+    'libgobject-2.0-0'") on macOS because Apple's dynamic linker doesn't
+    search /opt/homebrew/lib by default. Idempotent — safe to call from any
+    entry point that imports weasyprint.
+
+    On Linux the libs are typically in /usr/lib and resolved automatically;
+    on Windows GTK must be installed via the official MSI and the
+    libs are added to PATH by that installer.
+    """
+    if sys.platform != "darwin":
+        return
+    candidates = ["/opt/homebrew/lib", "/usr/local/lib"]
+    var = "DYLD_FALLBACK_LIBRARY_PATH"
+    current = os.environ.get(var, "")
+    parts = current.split(os.pathsep) if current else []
+    changed = False
+    for c in candidates:
+        if Path(c).is_dir() and c not in parts:
+            parts.insert(0, c)
+            changed = True
+    if changed:
+        os.environ[var] = os.pathsep.join(parts)
+
+
 def _detect_java_home() -> str | None:
     """Cross-platform best-effort detection of a Java install for veraPDF.
 

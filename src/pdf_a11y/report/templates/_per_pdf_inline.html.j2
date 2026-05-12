@@ -1,0 +1,98 @@
+{# Inline per-PDF block — used in the comprehensive PDF (each report
+   in a single document) and as the body of the standalone per-PDF
+   PDF. Expects:
+     - report:  PdfReport
+     - grouped: dict[severity_name -> list[Finding]]
+     - manual:  list[Finding] flagged for manual verification
+#}
+
+<div style="display:flex; gap:1rem; align-items:flex-start; margin-bottom:0.75rem;">
+  <div class="grade {{ report.score.grade | grade_class }}">{{ report.score.grade }}</div>
+  <div>
+    <div style="font-size:1.25rem; font-weight:700; line-height:1.2;">{{ '%.1f' | format(report.score.score_pct) }}% — Grade {{ report.score.grade }}</div>
+    <div class="muted" style="font-size:0.85em; word-break:break-all;">{{ report.metadata.source }}</div>
+    {% if report.score.critical_fail %}
+    <div style="margin-top:0.3rem;"><span class="pill sev-critical">Critical fail</span></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="banner-meta no-break-inside" style="margin-bottom:0.85rem;">
+  <dl style="display:grid; grid-template-columns:max-content 1fr max-content 1fr; gap:0.15rem 0.85rem; font-size:0.85em;">
+    <dt>Pages</dt> <dd>{{ report.metadata.page_count or '—' }}</dd>
+    <dt>Size</dt>  <dd>{{ '%.2f' | format(report.metadata.byte_size_mb) }} MB</dd>
+    <dt>Tagged</dt> <dd>{{ 'yes' if report.metadata.has_tagged_structure else 'no' }}</dd>
+    <dt>Language</dt> <dd>{{ report.metadata.language or '—' }}</dd>
+    <dt>PDF/UA</dt> <dd>{{ 'yes' if report.metadata.claims_pdf_ua else 'no' }}</dd>
+    <dt>Encrypted</dt> <dd>{{ 'yes' if report.metadata.encrypted else 'no' }}{% if report.metadata.encryption_blocks_at %} (blocks AT){% endif %}</dd>
+    <dt>Form</dt> <dd>{% if report.metadata.has_xfa %}XFA{% elif report.metadata.has_acroform %}AcroForm{% else %}—{% endif %}</dd>
+    <dt>Bookmarks</dt> <dd>{{ 'yes' if report.metadata.has_bookmarks else 'no' }}</dd>
+    <dt>Producer</dt> <dd>{{ (report.metadata.producer or '—')[:60] }}</dd>
+    <dt>Last modified</dt> <dd>{{ report.metadata.modification_date or '—' }}</dd>
+  </dl>
+</div>
+
+{% if report.score.critical_fail %}
+<div class="card sev-critical no-break-inside" style="margin-bottom:0.6rem;">
+  <strong>Why this is a Critical fail.</strong>
+  <ul style="margin: 0.4rem 0 0 1.2rem;">
+    {% for cid in report.score.critical_fail_reasons %}
+    <li>{{ cid }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if report.top_findings %}
+<h3 style="font-size:1rem; margin: 0.75rem 0 0.3rem;">Fix first</h3>
+<div class="cards">
+  {% for f in report.top_findings %}
+    <article class="card {{ f.severity | severity_class }} no-break-inside">
+      <div class="card-title">
+        <span class="pill {{ f.severity | severity_class }}">{{ f.severity.value }}</span>
+        <span class="check-id">{{ f.check_id }}</span>
+      </div>
+      <div style="font-size:0.92em;">{{ f.message }}</div>
+      <p class="card-rem" style="margin:0.3rem 0 0; font-size:0.85em;"><strong>Fix:</strong> {{ f.remediation }}</p>
+    </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% for sev_label, items in grouped.items() %}
+  {% if items %}
+  <h3 style="font-size:1rem; margin: 0.85rem 0 0.3rem;">{{ sev_label }} issues ({{ items|length }})</h3>
+  <div class="cards">
+    {% for f in items %}
+      <article class="card sev-{{ sev_label | lower }} no-break-inside">
+        <div class="card-title">
+          <span class="check-id">{{ f.check_id }}</span>
+          <span style="font-size:0.92em;">{{ f.message }}</span>
+        </div>
+        {% if f.page is not none or f.location %}
+          <p class="card-loc" style="font-size:0.8em; margin:0.2rem 0;">
+            {% if f.page is not none %}Page {{ f.page }}{% endif %}
+            {% if f.page is not none and f.location %} — {% endif %}
+            {% if f.location %}{{ f.location }}{% endif %}
+          </p>
+        {% endif %}
+        <p class="card-rem" style="margin:0.25rem 0 0; font-size:0.85em;"><strong>Fix:</strong> {{ f.remediation }}</p>
+        {% if f.standards %}
+          <p class="card-std" style="margin:0.25rem 0 0; font-size:0.78em;"><strong>Standards:</strong>
+          {% for s in f.standards %}{{ s.standard.value }} §{{ s.clause }}{% if not loop.last %}, {% endif %}{% endfor %}
+          </p>
+        {% endif %}
+      </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endfor %}
+
+{% if manual %}
+<h3 style="font-size:1rem; margin: 0.85rem 0 0.3rem;">Manual verification</h3>
+<ul style="font-size:0.85em; margin-top:0;">
+  {% for f in manual %}
+    <li><strong>{{ f.check_id }}</strong> — {{ f.message }}</li>
+  {% endfor %}
+</ul>
+{% endif %}

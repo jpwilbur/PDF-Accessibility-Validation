@@ -115,6 +115,9 @@
           <br>
           <span class="muted">
             source: <a href="{{ m.source }}" target="_blank" rel="noopener">{{ m.source }}</a>
+            {% if m.sha256 and not r.error %}
+              · <a href="../export/pdf/{{ m.sha256[:12] }}.pdf" class="pdf-dl">📥 download PDF</a>
+            {% endif %}
           </span>
         </td>
         <td>{{ m.page_count or '—' }}</td>

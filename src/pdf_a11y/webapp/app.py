@@ -213,6 +213,113 @@ def create_app() -> FastAPI:
 
     # ---- run-specific report file serving ----------------------------
 
+    # ---- PDF exports (executive, comprehensive, per-PDF) -------------
+
+    @app.get("/runs/{run_id}/export/executive.pdf")
+    async def export_executive(run_id: str) -> Any:
+        rec = store.get(run_id)
+        if rec is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        batch = _load_batch_report(rec.output_path)
+        if batch is None:
+            raise HTTPException(status_code=409, detail="Run has no reports yet")
+        from fastapi.responses import Response
+
+        from pdf_a11y.report.pdf_export import render_executive_summary_pdf
+
+        try:
+            data = render_executive_summary_pdf(batch)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"PDF export failed: {e}. On macOS, install the GUI "
+                    "library deps with `brew install pango glib cairo`. On "
+                    "Windows, install GTK per the WeasyPrint docs."
+                ),
+            ) from e
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="executive-{run_id}.pdf"'
+                ),
+            },
+        )
+
+    @app.get("/runs/{run_id}/export/comprehensive.pdf")
+    async def export_comprehensive(run_id: str) -> Any:
+        rec = store.get(run_id)
+        if rec is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        batch = _load_batch_report(rec.output_path)
+        if batch is None:
+            raise HTTPException(status_code=409, detail="Run has no reports yet")
+        from fastapi.responses import Response
+
+        from pdf_a11y.report.pdf_export import render_comprehensive_pdf
+
+        try:
+            data = render_comprehensive_pdf(batch)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"PDF export failed: {e}. On macOS, install the GUI "
+                    "library deps with `brew install pango glib cairo`."
+                ),
+            ) from e
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="comprehensive-{run_id}.pdf"'
+                ),
+            },
+        )
+
+    @app.get("/runs/{run_id}/export/pdf/{sha12}.pdf")
+    async def export_per_pdf(run_id: str, sha12: str) -> Any:
+        rec = store.get(run_id)
+        if rec is None:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        # Restrict the sha12 parameter to hex characters to defend against
+        # any path-traversal style abuse (e.g. "../x").
+        if not (sha12 and all(c in "0123456789abcdefABCDEF" for c in sha12)):
+            raise HTTPException(status_code=400, detail="Invalid file id")
+        report_json = rec.output_path / "pdfs" / f"{sha12}.json"
+        if not report_json.is_file():
+            raise HTTPException(status_code=404, detail="Report not found")
+        report = _load_pdf_report(report_json)
+        if report is None:
+            raise HTTPException(status_code=500, detail="Could not parse report JSON")
+        from fastapi.responses import Response
+
+        from pdf_a11y.report.pdf_export import render_per_pdf_pdf
+
+        try:
+            data = render_per_pdf_pdf(report)
+        except OSError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"PDF export failed: {e}. On macOS, install the GUI "
+                    "library deps with `brew install pango glib cairo`."
+                ),
+            ) from e
+        safe_title = (report.metadata.title or sha12).replace('"', "").replace("/", "-")[:60]
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_title}.pdf"',
+            },
+        )
+
+    # ---- run-specific report file serving ----------------------------
+
     @app.get("/runs/{run_id}/report/{file_path:path}")
     async def run_report_file(run_id: str, file_path: str) -> Any:
         rec = store.get(run_id)
@@ -240,6 +347,73 @@ def create_app() -> FastAPI:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _load_pdf_report(json_path: Path) -> Any:
+    """Reconstruct a PdfReport from its persisted JSON."""
+    import json as _json
+
+    try:
+        raw = _json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError):
+        return None
+    from pdf_a11y.models import PdfReport
+
+    try:
+        return PdfReport.model_validate(raw)
+    except Exception:
+        return None
+
+
+def _load_batch_report(output_dir: Path) -> Any:
+    """Reconstruct a BatchReport from the run's batch.json + per-PDF JSONs.
+
+    We don't persist the BatchReport itself (only batch.json with summary
+    counts and per-PDF JSONs in pdfs/), so this stitches one together for
+    the PDF exporter. Returns None if the run hasn't produced output yet.
+    """
+    import json as _json
+    from datetime import datetime
+
+    batch_meta_path = output_dir / "batch.json"
+    pdfs_dir = output_dir / "pdfs"
+    if not batch_meta_path.is_file() or not pdfs_dir.is_dir():
+        return None
+
+    try:
+        meta = _json.loads(batch_meta_path.read_text(encoding="utf-8"))
+    except (OSError, _json.JSONDecodeError):
+        return None
+
+    reports: list[Any] = []
+    for json_file in sorted(pdfs_dir.glob("*.json")):
+        report = _load_pdf_report(json_file)
+        if report is not None:
+            reports.append(report)
+
+    from pdf_a11y import __version__ as app_version
+    from pdf_a11y.models import BatchReport, ToolVersions
+
+    try:
+        started_at = datetime.fromisoformat(meta["started_at"])
+        finished_at = datetime.fromisoformat(meta["finished_at"])
+    except (KeyError, ValueError):
+        return None
+
+    # Use the first per-PDF report's tool versions if available, else stub.
+    tool_versions = (
+        reports[0].tool_versions
+        if reports
+        else ToolVersions(pdf_a11y=app_version, python="?")
+    )
+
+    return BatchReport(
+        started_at=started_at,
+        finished_at=finished_at,
+        reports=reports,
+        input_summary={"n_sources": len(reports)},
+        tool_versions=tool_versions,
+    )
 
 
 def _load_grade_counts(output_dir: Path) -> dict[str, int]:

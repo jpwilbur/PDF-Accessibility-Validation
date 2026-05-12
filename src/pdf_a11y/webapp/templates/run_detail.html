@@ -26,15 +26,21 @@
         {% endif %}
       </p>
     </div>
-    {# Primary CTA: jump to the report on the same page + open in new tab.
-       Hidden until summary.html exists; the SSE handler reveals it when
-       the run finishes live. #}
+    {# Primary CTA: jump to the report on the same page + open in new tab
+       + download as PDF. Hidden until summary.html exists; the SSE handler
+       reveals it when the run finishes live. #}
     <div id="viewReportActions" style="display:{{ 'flex' if summary_exists else 'none' }}; gap:0.5rem; flex-wrap:wrap;">
       <a href="#reportFrame" class="btn" id="viewReportBtn" style="font-size:0.95rem; padding:0.65rem 1.4rem;">
         ↓ View report
       </a>
       <a href="/runs/{{ run.id }}/report/summary.html" target="_blank" rel="noopener" class="btn secondary" style="font-size:0.95rem; padding:0.65rem 1.4rem;">
         ↗ Open in new tab
+      </a>
+      <a href="/runs/{{ run.id }}/export/executive.pdf" class="btn secondary" style="font-size:0.95rem; padding:0.65rem 1.4rem;" title="Run-level summary as PDF (cover, stats, grade chart, top issues)">
+        📥 Executive PDF
+      </a>
+      <a href="/runs/{{ run.id }}/export/comprehensive.pdf" class="btn secondary" style="font-size:0.95rem; padding:0.65rem 1.4rem;" title="Full report with every PDF's findings inline. Can take a minute on large runs.">
+        📥 Comprehensive PDF
       </a>
     </div>
   </div>

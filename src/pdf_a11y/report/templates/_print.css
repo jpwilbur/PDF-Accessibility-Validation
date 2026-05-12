@@ -1,0 +1,164 @@
+/* Print stylesheet for PDF export via WeasyPrint.
+   Loaded alongside _base.css for executive/comprehensive/per-PDF exports.
+   We deliberately keep WeasyPrint-specific rules separate from the
+   browser-facing _base.css so screen rendering stays untouched.
+*/
+
+@page {
+  size: Letter;
+  margin: 0.65in 0.6in 0.7in 0.6in;
+
+  @top-left {
+    content: string(doc-title);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 8pt;
+    color: #555555;
+  }
+  @top-right {
+    content: "ObservePoint PDF Validation";
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 8pt;
+    font-weight: 600;
+    color: #1E1E1E;
+  }
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 8pt;
+    color: #555555;
+  }
+}
+
+/* The cover page has no running header — it's the title page. */
+@page :first {
+  @top-left { content: ""; }
+  @top-right { content: ""; }
+}
+
+html, body {
+  font-size: 10pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+  background: #ffffff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* The page-named-string lets `@top-left` show the current document title. */
+.doc-title-hidden { string-set: doc-title content(); }
+
+/* Sections that should always start on a new page. */
+.page-break-before { page-break-before: always; }
+.no-break-inside { page-break-inside: avoid; }
+
+/* Hide screen-only chrome that doesn't make sense in a printed doc. */
+.no-print, nav.topnav, .toolbar, footer { display: none !important; }
+
+/* Make collapsed <details> render expanded in print. */
+details[id] { display: block !important; }
+details > summary { list-style: none; cursor: default; }
+details > summary::-webkit-details-marker { display: none; }
+details { page-break-inside: avoid; }
+
+/* Tighter cards / tables for print. */
+.card { box-shadow: none; border: 1px solid #d0d0d0; padding: 0.85rem; margin-bottom: 0.65rem; }
+table { font-size: 8.5pt; }
+th, td { padding: 0.35rem 0.5rem; }
+.grade { width: 1.8rem !important; height: 1.8rem !important; font-size: 0.9rem !important; }
+.cards { gap: 0.4rem; }
+.card-title { font-size: 0.95rem; }
+
+/* Avoid breaking inside an individual finding card. */
+.cards > .card { page-break-inside: avoid; }
+
+/* Per-PDF-report-in-comprehensive boundary. */
+.pdf-report-section { page-break-before: always; }
+.pdf-report-section:first-child { page-break-before: auto; }
+
+/* Cover-page typography. */
+.cover {
+  page-break-after: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 8.5in;
+  padding: 0 0.5in;
+}
+.cover h1 { font-size: 2.4rem; margin: 0 0 0.4rem; color: #1E1E1E; letter-spacing: -0.02em; }
+.cover .cover-sub { font-size: 1.05rem; color: #555555; margin: 0 0 2.5rem; font-weight: 500; }
+.cover .cover-meta { font-size: 0.95rem; color: #1a1a1a; }
+.cover .cover-meta dt { color: #6B7280; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; margin-top: 0.85rem; }
+.cover .cover-meta dd { margin: 0.1rem 0 0; font-weight: 500; }
+.cover .brand-mark {
+  font-weight: 800;
+  font-style: italic;
+  color: #F2CD14;
+  background: #1E1E1E;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  margin-bottom: 2rem;
+  display: inline-block;
+}
+
+/* Stats grid is colourful — readable in print but slightly muted. */
+.exec-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+.exec-stat {
+  border: 1px solid #d0d0d0;
+  border-left: 5px solid #1E1E1E;
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+}
+.exec-stat .lbl { font-size: 0.7rem; color: #6B7280; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.exec-stat .val { font-size: 1.6rem; font-weight: 700; color: #1E1E1E; margin-top: 0.15rem; letter-spacing: -0.02em; }
+.exec-stat .sub { font-size: 0.78rem; color: #555555; margin-top: 0.15rem; }
+.exec-stat.success { border-left-color: #15803D; }
+.exec-stat.warn    { border-left-color: #B45309; }
+.exec-stat.danger  { border-left-color: #B91C1C; }
+.exec-stat.brand   { border-left-color: #F2CD14; }
+
+/* Mini grade-distribution bar chart. */
+.exec-grades { margin: 0.4rem 0 1rem; }
+.exec-grade-row { display: flex; align-items: center; gap: 0.6rem; margin: 0.3rem 0; }
+.exec-grade-row .glabel { width: 1.3rem; font-weight: 700; font-size: 0.95rem; text-align: right; }
+.exec-grade-row .gbar {
+  flex: 1 1 auto;
+  height: 0.85rem;
+  background: #f0f0f0;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+}
+.exec-grade-row .gfill { height: 100%; }
+.exec-grade-row .gn { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 2.5rem; }
+.grade-A .gfill { background: #15803D; }
+.grade-B .gfill { background: #4D7C0F; }
+.grade-C .gfill { background: #B45309; }
+.grade-D .gfill { background: #C2410C; }
+.grade-F .gfill { background: #B91C1C; }
+.grade-A .glabel { color: #15803D; }
+.grade-B .glabel { color: #4D7C0F; }
+.grade-C .glabel { color: #B45309; }
+.grade-D .glabel { color: #C2410C; }
+.grade-F .glabel { color: #B91C1C; }
+
+/* The comprehensive doc's per-PDF separator header. */
+.pdf-report-section > h2.section-title {
+  background: #1E1E1E;
+  color: #F2CD14;
+  padding: 0.45rem 0.85rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-style: italic;
+  font-weight: 700;
+  border-radius: 4px;
+  margin: 0 0 0.85rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}

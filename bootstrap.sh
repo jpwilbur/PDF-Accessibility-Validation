@@ -45,8 +45,9 @@ if [ "$platform" = "mac" ]; then
         err "Homebrew is required on macOS. Install it from https://brew.sh, then re-run."
         exit 1
     fi
-    say "Installing veraPDF, OpenJDK, and Tesseract via Homebrew (skips already-installed)…"
-    for pkg in verapdf openjdk tesseract; do
+    say "Installing veraPDF, OpenJDK, Tesseract, and PDF-export libs via Homebrew (skips already-installed)…"
+    # pango/glib/cairo are needed by WeasyPrint for PDF export.
+    for pkg in verapdf openjdk tesseract pango glib cairo; do
         if brew list --formula | grep -qx "$pkg"; then
             ok "  $pkg already installed"
         else
