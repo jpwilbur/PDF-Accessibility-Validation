@@ -172,13 +172,31 @@ disk space for a run you no longer need.
 
 ## Updating
 
-When new versions land, run:
+When changes land in the repo and you want them locally:
 
-```bash
-uv tool upgrade pdf-a11y
-```
+1. Stop the running server (Ctrl+C in the Terminal / PowerShell window
+   that's running `pdf-a11y serve`).
+2. Force a fresh pull from GitHub:
 
-(Same command on Mac and Windows.)
+   ```bash
+   uv tool install --force "git+https://github.com/jpwilbur/PDF-Accessibility-Validation"
+   ```
+
+   `--force` is the magic word — without it, `uv` may serve you the
+   cached version from the last install. With it, `uv` re-fetches
+   the latest commit on `main`.
+3. Start the server again:
+
+   ```bash
+   pdf-a11y serve
+   ```
+
+Same command on Mac and Windows.
+
+> **Heads up about old runs.** Reports from runs you did *before* the
+> update are not re-rendered by upgrading the app — they stay on disk
+> with whatever HTML/PDF templates were current when the run finished.
+> To see UI/template changes, start a fresh run.
 
 ---
 
