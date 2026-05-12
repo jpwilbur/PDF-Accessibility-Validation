@@ -186,9 +186,25 @@ def serve(
 
     if not no_open:
         # Delay slightly so the server is up before the browser asks.
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        # daemon=True so the timer thread doesn't keep the process alive
+        # if the user hits Ctrl+C within the first 600ms.
+        timer = threading.Timer(0.6, lambda: webbrowser.open(url))
+        timer.daemon = True
+        timer.start()
 
-    uvicorn.run(web_app, host=host, port=port, log_level="warning")
+    # timeout_graceful_shutdown bounds Ctrl+C: by default uvicorn waits
+    # indefinitely for in-flight connections to close. SSE clients (the
+    # run-detail page polls every ~1s for progress) keep their stream
+    # open until the browser tab is closed, so without a timeout
+    # `pdf-a11y serve` would refuse to exit on Ctrl+C as long as any tab
+    # had an open run-detail page. 3s is enough for clean teardown.
+    uvicorn.run(
+        web_app,
+        host=host,
+        port=port,
+        log_level="warning",
+        timeout_graceful_shutdown=3,
+    )
 
 
 @app.command("gen-docs")
