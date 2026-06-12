@@ -14,12 +14,16 @@ between cwds and shells.
 
 from __future__ import annotations
 
+import logging
+import shutil
 from pathlib import Path
 
 from platformdirs import user_data_dir
 
 APP_NAME = "pdf-a11y"
 APP_AUTHOR = "ObservePoint"
+
+logger = logging.getLogger(__name__)
 
 
 def app_data_dir() -> Path:
@@ -50,3 +54,32 @@ def settings_path() -> Path:
 def ensure_dirs() -> None:
     app_data_dir().mkdir(parents=True, exist_ok=True)
     runs_dir().mkdir(parents=True, exist_ok=True)
+
+
+def sweep_orphaned_caches() -> int:
+    """Remove every ``runs/*/cache/`` directory; return bytes reclaimed.
+
+    Safe to call only when no run is active (e.g. at app startup): a run's
+    cache is transient working space at ``runs/<id>/cache``. Report outputs
+    (``pdfs/``, ``findings.jsonl``, ``summary.*``, ``batch.json``) are never
+    touched. Per-directory errors are logged and skipped (best-effort).
+    """
+    base = runs_dir()
+    if not base.exists():
+        return 0
+    reclaimed = 0
+    for cache in base.glob("*/cache"):
+        if not cache.is_dir():
+            continue
+        try:
+            size = sum(
+                f.stat().st_size for f in cache.rglob("*") if f.is_file()
+            )
+        except OSError:
+            size = 0
+        try:
+            shutil.rmtree(cache)
+            reclaimed += size
+        except OSError as e:
+            logger.warning("could not remove orphaned cache %s: %s", cache, e)
+    return reclaimed
