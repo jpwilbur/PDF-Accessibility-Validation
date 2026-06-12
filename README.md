@@ -180,26 +180,31 @@ disk space for a run you no longer need.
 
 ## Updating
 
-When changes land in the repo and you want them locally:
+Already have the tool installed and want the latest version? The steps
+are **identical on Mac and Windows** — run them in **Terminal** (Mac) or
+**PowerShell** (Windows):
 
-1. Stop the running server (Ctrl+C in the Terminal / PowerShell window
-   that's running `pdf-a11y serve`).
-2. Force a fresh pull from GitHub:
+1. Stop the running server — press `Ctrl+C` in the Terminal / PowerShell
+   window that's running `pdf-a11y serve`.
+2. Re-install the latest version from GitHub:
 
    ```bash
-   uv tool install --force "git+https://github.com/jpwilbur/PDF-Accessibility-Validation"
+   uv tool install --force --reinstall "git+https://github.com/jpwilbur/PDF-Accessibility-Validation"
    ```
 
-   `--force` is the magic word — without it, `uv` may serve you the
-   cached version from the last install. With it, `uv` re-fetches
-   the latest commit on `main`.
-3. Start the server again:
+3. Start it again:
 
    ```bash
    pdf-a11y serve
    ```
 
-Same command on Mac and Windows.
+**Why `--force --reinstall` and not just `--force`?** `--force` only
+overwrites the installed tool — on its own it can quietly re-install the
+*same commit* `uv` already has cached, so you'd see no change (this is the
+classic "I updated but nothing changed" trap). `--reinstall` implies
+`--refresh`, which clears `uv`'s git cache and re-fetches the newest commit
+on `main`. Use both together: `--force` overwrites the existing install,
+`--reinstall` guarantees it's actually the latest code.
 
 > **Heads up about old runs.** Reports from runs you did *before* the
 > update are not re-rendered by upgrading the app — they stay on disk
