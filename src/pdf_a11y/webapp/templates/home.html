@@ -24,7 +24,14 @@
         <div>
           <label for="op_report_id">Saved report ID</label>
           <input type="text" id="op_report_id" name="op_report_id" value="{{ settings.last_op_report_id }}" placeholder="e.g. 12345" required>
-          <div class="muted">The saved report MUST expose a <code>LINK_URL</code> column.</div>
+          <div class="muted">
+            Use <strong>either</strong> report type — the app auto-detects which from the saved report:
+            <ul style="margin:0.35rem 0 0; padding-left:1.15rem;">
+              <li>a <strong>links report</strong> that exposes a <code>LINK_URL</code> column, <strong>or</strong></li>
+              <li>a <strong>console-log report</strong> (the <em>Browser Logs</em> grid) with a <code>LOG_MESSAGE</code> column whose rows look like <code>PDF&nbsp;Links:["https://…","https://…"]</code></li>
+            </ul>
+            The required column must be present in the saved-report grid, or the run will fail with a message telling you which one to add.
+          </div>
         </div>
       </div>
       <div class="field-row">
