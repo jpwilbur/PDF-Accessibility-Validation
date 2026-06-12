@@ -20,7 +20,14 @@
       <p class="muted" style="margin:0.4rem 0 0; font-size:0.85em;">
         <strong style="color:var(--fg-soft);">Source:</strong>
         {% if run.source_kind == 'observepoint' %}
-          ObservePoint #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
+          {% if run.source_meta.entity_mode == 'browser_log' %}
+            ObservePoint console-log report (PDF Links) #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
+            {% if run.source_meta.console_log_rows %}
+              <br><span class="muted">Extracted {{ run.source_meta.n_urls }} distinct PDF URLs from {{ run.source_meta.console_log_rows }} console-log rows</span>
+            {% endif %}
+          {% else %}
+            ObservePoint link report #{{ run.source_meta.report_id }}{% if run.source_meta.report_name %} — {{ run.source_meta.report_name }}{% endif %}
+          {% endif %}
         {% else %}
           Manual ({{ run.source_meta.n_inputs or run.source_meta.n_urls or '?' }} inputs)
         {% endif %}

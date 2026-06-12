@@ -164,6 +164,8 @@ class RunRunner:
                 "report_id": report_id,
                 "report_name": result.report_name,
                 "grid_entity_type": result.grid_entity_type,
+                "entity_mode": result.entity_mode,
+                "console_log_rows": result.total_rows,
                 "n_urls": len(result.urls),
             },
             urls=result.urls,
