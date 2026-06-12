@@ -12,6 +12,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from pdf_a11y import __version__
 from pdf_a11y.acquire import AcquiredPdf, Downloader
@@ -238,6 +239,23 @@ class Pipeline:
             finished_at=finished,
             duration_ms=(time.perf_counter() - t0) * 1000.0,
         )
+
+    def _delete_cached(self, ap: AcquiredPdf, cache_dir: Path) -> None:
+        """Delete a downloaded PDF from the cache once it's been evaluated.
+
+        Guarded so it only ever removes files *inside* cache_dir — never a
+        user's original local source (which lives outside the cache), and a
+        no-op on download-failure rows whose local_path is an empty Path().
+        """
+        path = ap.local_path
+        try:
+            if (
+                path.is_file()
+                and path.resolve().is_relative_to(cache_dir.resolve())
+            ):
+                path.unlink()
+        except OSError as e:
+            logger.warning("could not delete cached PDF %s: %s", path, e)
 
     def _build_metadata(self, source: str, ap: AcquiredPdf, ctx: PdfContext) -> FileMetadata:
         encryption_blocks_at = False
