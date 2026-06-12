@@ -28,10 +28,10 @@ out of scope here.
 ## Solution overview
 
 - **Chunked streaming in `Pipeline.run()`** — process `sources` in slices of
-  `chunk_size` (default 25): download the chunk concurrently, evaluate each PDF
-  (sequential, unchanged), then (when enabled by the web app) delete each cached
-  file immediately after its evaluation. Peak disk drops to ~`chunk_size ×
-  avg PDF` (≈40 MB at 25).
+  `chunk_size` (default 10): download the chunk concurrently, evaluate each PDF
+  (sequential, unchanged), then delete each cached file immediately after its
+  evaluation (on by default). Peak disk drops to ~`chunk_size × avg PDF`
+  (≈17 MB at 10).
 - **Startup orphan sweep** — at app startup, remove every `runs/*/cache/`
   directory. Safe because no run is active at startup; reclaims orphans left by
   past hard kills/crashes.
@@ -59,14 +59,13 @@ for chunk_indices in batches(range(len(sources)), chunk_size):
 _mark_duplicates(reports)
 ```
 
-**Why deletion is gated.** The web app uses an *ephemeral per-run* cache
-(`runs/<id>/cache`) and wants it gone immediately. The **CLI**, however, uses a
-*persistent* `--cache-dir` (default `./.cache/pdfs`) as a deliberate cross-run
-content cache — deleting after evaluation there would be a silent regression
-(re-runs would re-download). So per-PDF deletion is controlled by a
-`delete_cache_after_eval` flag (below): the web runner sets it `True`; the CLI
-leaves it at its `False` default and keeps today's persistent-cache behavior.
-Chunking itself is always on and harmless in both modes.
+**Deletion is on by default, with an opt-out.** Per-PDF deletion after
+evaluation is controlled by a `delete_cache_after_eval` flag that **defaults to
+`True`** — both the web app and the CLI stream-delete by default, so neither
+accumulates PDF bytes. The flag exists as a config-level opt-out (and a test
+seam): setting it `False` restores a persistent content cache for callers who
+deliberately want cross-run reuse. The web runner relies on the default; no
+caller needs to set it `True` explicitly.
 
 - `_evaluate_one` and the `ProgressEvent` emission are **unchanged**. `n_done`
   still counts across the whole batch, so the progress bar advances smoothly
@@ -98,24 +97,25 @@ run.
 Add to `NetworkConfig`:
 
 ```python
-chunk_size: int = 25
+chunk_size: int = 10
 """Download+evaluate PDFs in slices of this size so peak disk stays
 ~chunk_size × avg PDF instead of the whole batch."""
 
-delete_cache_after_eval: bool = False
-"""Delete each cached PDF immediately after its evaluation. The web app sets
-this True (ephemeral per-run cache); the CLI leaves it False to preserve its
-persistent --cache-dir content cache across runs."""
+delete_cache_after_eval: bool = True
+"""Delete each cached PDF immediately after its evaluation so disk never holds
+more than one chunk. On by default for both the web app and the CLI. Set False
+to keep a persistent content cache for deliberate cross-run reuse."""
 ```
 
 `Pipeline.run()` reads `self.config.network.chunk_size` and
 `self.config.network.delete_cache_after_eval`. A `chunk_size <= 0` is treated as
 "all sources in one chunk" defensively (avoids `itertools.batched`'s `ValueError`
-on `n < 1`), though the default is 25.
+on `n < 1`), though the default is 10.
 
-The web runner (`webapp/runner.py`, where it already sets
-`config.paths.cache_dir = output_dir/cache`) additionally sets
-`config.network.delete_cache_after_eval = True`.
+No caller needs to set `delete_cache_after_eval` — both entry points use the
+`True` default. The web runner continues to set
+`config.paths.cache_dir = output_dir/cache` so deletions target the ephemeral
+per-run cache.
 
 ### 3. Startup orphan sweep (`src/pdf_a11y/paths.py` + `webapp/app.py`)
 
@@ -161,12 +161,12 @@ def sweep_orphaned_caches() -> int:
 ## Testing
 
 **Pipeline (`tests/`):**
-- Chunked run with `chunk_size=2` **and `delete_cache_after_eval=True`** over
-  local PDF fixtures: all reports produced and correct, and `cache_dir` contains
-  no `.pdf` files at the end.
-- Flag off (default): same run with `delete_cache_after_eval=False` leaves the
-  cached `.pdf` files in `cache_dir` (CLI behavior preserved) and still produces
-  correct reports.
+- Chunked run with `chunk_size=2` (deletion on by default) over local PDF
+  fixtures: all reports produced and correct, and `cache_dir` contains no `.pdf`
+  files at the end.
+- Opt-out: same run with `delete_cache_after_eval=False` leaves the cached
+  `.pdf` files in `cache_dir` (persistent-cache mode) and still produces correct
+  reports.
 - `_delete_cached`: deletes a file inside `cache_dir`; no-ops on a path **outside**
   `cache_dir` (the file survives); no-ops on a non-existent path; swallows
   `OSError`.
