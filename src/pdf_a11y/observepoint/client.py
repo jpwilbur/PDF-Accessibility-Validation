@@ -245,6 +245,20 @@ async def fetch_pdf_urls_async(
                 break
             page += 1
 
+        if entity_mode == "browser_log" and total_count > 0 and not urls:
+            return ObservePointFetchResult(
+                report_id=report_id,
+                report_name=report_name,
+                grid_entity_type=grid_entity_raw,
+                entity_mode=entity_mode,
+                total_rows=max(total_count, 0),
+                error=(
+                    f"Found {total_count} console-log rows but extracted 0 PDF "
+                    f"URLs — the log format may have changed (expected "
+                    f"'PDF Links:[...]')."
+                ),
+            )
+
         return ObservePointFetchResult(
             urls=urls,
             report_id=report_id,

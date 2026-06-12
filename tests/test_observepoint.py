@@ -280,3 +280,75 @@ def test_browser_logs_extracts_and_dedupes() -> None:
     ]
     assert result.entity_mode == "browser_log"
     assert result.grid_entity_type == "browser_logs"
+
+
+def test_browser_logs_skips_malformed_rows() -> None:
+    good = 'PDF Links:["https://oklahoma.gov/ok.pdf"]'
+    bad_json = 'PDF Links:["https://oklahoma.gov/x.pdf"'  # truncated, invalid
+    no_match = "Some unrelated console output with no payload"
+    not_list = 'PDF Links:{"a":1}'
+    routes = {
+        "/reports/grid/saved/28159": _browser_log_saved(),
+        "/reports/grid/browser-logs": _browser_log_page(
+            [good, bad_json, no_match, not_list], page=0, total_pages=1
+        ),
+    }
+    transport = _make_handler(routes)
+    client = httpx.AsyncClient(
+        transport=transport, base_url="https://api.observepoint.com"
+    )
+    result = _run(
+        fetch_pdf_urls_async(api_key="t", report_id="28159", client=client)
+    )
+    assert result.error is None, result.error
+    assert result.urls == ["https://oklahoma.gov/ok.pdf"]
+
+
+def test_browser_logs_missing_log_message_column_hard_fails() -> None:
+    no_col_page = {
+        "metadata": {
+            "headers": [{"column": {"columnId": "SOMETHING_ELSE"}}],
+            "pagination": {
+                "currentPageNumber": 0,
+                "totalPageCount": 1,
+                "totalCount": 0,
+            },
+        },
+        "rows": [],
+    }
+    routes = {
+        "/reports/grid/saved/28159": _browser_log_saved(),
+        "/reports/grid/browser-logs": no_col_page,
+    }
+    transport = _make_handler(routes)
+    client = httpx.AsyncClient(
+        transport=transport, base_url="https://api.observepoint.com"
+    )
+    result = _run(
+        fetch_pdf_urls_async(api_key="t", report_id="28159", client=client)
+    )
+    assert result.error is not None
+    assert "LOG_MESSAGE" in result.error
+    assert result.entity_mode == "browser_log"
+
+
+def test_browser_logs_zero_urls_returns_diagnosis() -> None:
+    """Rows present but none parse to URLs → actionable diagnosis error."""
+    routes = {
+        "/reports/grid/saved/28159": _browser_log_saved(),
+        "/reports/grid/browser-logs": _browser_log_page(
+            ["totally different log format", "another non-matching line"],
+            page=0,
+            total_pages=1,
+        ),
+    }
+    transport = _make_handler(routes)
+    client = httpx.AsyncClient(
+        transport=transport, base_url="https://api.observepoint.com"
+    )
+    result = _run(
+        fetch_pdf_urls_async(api_key="t", report_id="28159", client=client)
+    )
+    assert result.error is not None
+    assert "0 PDF URLs" in result.error
+    assert result.urls == []
