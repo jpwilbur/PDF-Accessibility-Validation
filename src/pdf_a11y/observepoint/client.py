@@ -22,8 +22,11 @@ Office 365 customers, and we want the actual destination.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass, field
+from typing import Literal
 from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
@@ -34,6 +37,9 @@ OBSERVEPOINT_BASE = "https://api.observepoint.com/v3"
 DEFAULT_PAGE_SIZE = 500
 DEFAULT_TIMEOUT = 60.0
 LINK_URL_COLUMN_ID = "LINK_URL"
+LOG_MESSAGE_COLUMN_ID = "LOG_MESSAGE"
+BROWSER_LOGS_ENTITY = "browser_logs"
+_PDF_LINKS_RE = re.compile(r"PDF Links:\s*(\[.*\])\s*$", re.DOTALL)
 
 
 class ObservePointError(Exception):
@@ -48,6 +54,7 @@ class ObservePointFetchResult:
     report_id: str = ""
     report_name: str | None = None
     grid_entity_type: str | None = None
+    entity_mode: Literal["link", "browser_log"] | None = None
     total_rows: int = 0
 
     error: str | None = None
@@ -138,6 +145,15 @@ async def fetch_pdf_urls_async(
                 error="Saved report response missing gridEntityType.",
             )
 
+        entity_mode: Literal["link", "browser_log"] = (
+            "browser_log" if grid_entity_raw == BROWSER_LOGS_ENTITY else "link"
+        )
+        required_col = (
+            LOG_MESSAGE_COLUMN_ID
+            if entity_mode == "browser_log"
+            else LINK_URL_COLUMN_ID
+        )
+
         query_def = saved.get("queryDefinition") or {}
 
         # --- Step 2: paginate through grid rows ---------------------------
@@ -178,20 +194,23 @@ async def fetch_pdf_urls_async(
                 column_id_seen = True
                 for i, h in enumerate(headers_list):
                     col = (h or {}).get("column") or {}
-                    if col.get("columnId") == LINK_URL_COLUMN_ID:
+                    if col.get("columnId") == required_col:
                         link_col_idx = i
                         break
 
             if link_col_idx < 0 and column_id_seen:
-                # Headers were present but no LINK_URL column. Hard-fail per spec.
+                col_label = (
+                    "Log Message" if entity_mode == "browser_log" else "Link URL"
+                )
                 return ObservePointFetchResult(
                     report_id=report_id,
                     report_name=report_name,
                     grid_entity_type=grid_entity_raw,
+                    entity_mode=entity_mode,
                     error=(
                         f"Saved report '{report_name or report_id}' has no "
-                        f"LINK_URL column. Edit the saved-report grid to "
-                        f"include the Link URL column and try again."
+                        f"{required_col} column. Edit the saved-report grid to "
+                        f"include the {col_label} column and try again."
                     ),
                 )
 
@@ -206,10 +225,14 @@ async def fetch_pdf_urls_async(
                     raw = row[link_col_idx]
                     if not isinstance(raw, str) or not raw:
                         continue
-                    url = _unwrap_safelinks(raw)
-                    if url not in seen:
-                        seen.add(url)
-                        urls.append(url)
+                    if entity_mode == "browser_log":
+                        extracted = _extract_browser_log_urls(raw)
+                    else:
+                        extracted = [_unwrap_safelinks(raw)]
+                    for url in extracted:
+                        if url not in seen:
+                            seen.add(url)
+                            urls.append(url)
 
             current_page = int(pagination.get("currentPageNumber", page))
             total_pages = int(pagination.get("totalPageCount", current_page + 1))
@@ -222,11 +245,38 @@ async def fetch_pdf_urls_async(
             report_id=report_id,
             report_name=report_name,
             grid_entity_type=grid_entity_raw,
+            entity_mode=entity_mode,
             total_rows=max(total_count, 0),
         )
     finally:
         if own_client:
             await client.aclose()
+
+
+def _extract_browser_log_urls(raw: str) -> list[str]:
+    """Parse a 'PDF Links:[...]' console message into a list of PDF URLs.
+
+    Resilient: a row that doesn't match, isn't valid JSON, or isn't a list
+    yields [] (logged at DEBUG) — never raises. The saved report's own filter
+    governs which rows are in scope; a malformed straggler must not sink a run.
+    """
+    match = _PDF_LINKS_RE.search(raw)
+    if not match:
+        logger.debug("browser-log row had no 'PDF Links:[...]' payload: %.80r", raw)
+        return []
+    try:
+        parsed = json.loads(match.group(1))
+    except json.JSONDecodeError as e:
+        logger.debug("browser-log row had invalid JSON payload: %s", e)
+        return []
+    if not isinstance(parsed, list):
+        logger.debug("browser-log row payload was not a list: %.80r", raw)
+        return []
+    out: list[str] = []
+    for item in parsed:
+        if isinstance(item, str) and item.startswith(("http://", "https://")):
+            out.append(_unwrap_safelinks(item))
+    return out
 
 
 def _unwrap_safelinks(url: str) -> str:

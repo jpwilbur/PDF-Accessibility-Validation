@@ -67,6 +67,31 @@ def _grid_page(rows: list[list[Any]], *, page: int, total_pages: int) -> dict[st
     }
 
 
+def _browser_log_saved() -> dict[str, Any]:
+    return {
+        "id": 28159,
+        "name": "PDF Links - Console Method",
+        "gridEntityType": "browser_logs",
+        "queryDefinition": {"columns": [], "filters": {}, "page": 0, "size": 500},
+    }
+
+
+def _browser_log_page(
+    messages: list[str], *, page: int, total_pages: int
+) -> dict[str, Any]:
+    return {
+        "metadata": {
+            "headers": [{"column": {"columnId": "LOG_MESSAGE"}}],
+            "pagination": {
+                "currentPageNumber": page,
+                "totalPageCount": total_pages,
+                "totalCount": len(messages) + page * 2,
+            },
+        },
+        "rows": [[m] for m in messages],
+    }
+
+
 def _make_handler(routes: dict[str, dict[str, Any]]) -> httpx.MockTransport:
     """Build an httpx MockTransport from a {url_substring: response_dict}-or-list mapping.
 
@@ -222,3 +247,36 @@ def test_grid_entity_underscore_to_hyphen_conversion(raw_entity: str) -> None:
     result = _run(fetch_pdf_urls_async(api_key="t", report_id="1", client=client))
     assert result.error is None
     assert result.grid_entity_type == raw_entity
+
+
+def test_browser_logs_extracts_and_dedupes() -> None:
+    """browser_logs entity: parse 'PDF Links:[...]' from LOG_MESSAGE, dedupe."""
+    msg_a = (
+        'PDF Links:["https://oklahoma.gov/a.pdf",'
+        '"https://oklahoma.gov/b.pdf"]'
+    )
+    msg_b = (
+        'PDF Links:["https://oklahoma.gov/b.pdf",'  # dup of msg_a
+        '"https://oklahoma.gov/c.pdf"]'
+    )
+    routes = {
+        "/reports/grid/saved/28159": _browser_log_saved(),
+        "/reports/grid/browser-logs": _browser_log_page(
+            [msg_a, msg_b], page=0, total_pages=1
+        ),
+    }
+    transport = _make_handler(routes)
+    client = httpx.AsyncClient(
+        transport=transport, base_url="https://api.observepoint.com"
+    )
+    result = _run(
+        fetch_pdf_urls_async(api_key="t", report_id="28159", client=client)
+    )
+    assert result.error is None, result.error
+    assert result.urls == [
+        "https://oklahoma.gov/a.pdf",
+        "https://oklahoma.gov/b.pdf",
+        "https://oklahoma.gov/c.pdf",
+    ]
+    assert result.entity_mode == "browser_log"
+    assert result.grid_entity_type == "browser_logs"
