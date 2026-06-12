@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import sys
 from collections.abc import AsyncIterator
@@ -70,6 +71,12 @@ class _HostAllowlistMiddleware(BaseHTTPMiddleware):
 
 def create_app() -> FastAPI:
     paths.ensure_dirs()
+    reclaimed = paths.sweep_orphaned_caches()
+    if reclaimed:
+        logging.getLogger(__name__).info(
+            "Reclaimed %.1f MB of orphaned PDF cache from interrupted run(s)",
+            reclaimed / 1_048_576,
+        )
     store = RunStore()
     bus = ProgressBus()
     runner = RunRunner(store=store, bus=bus)
