@@ -29,6 +29,7 @@
       {% if report.metadata.final_url and report.metadata.final_url != report.metadata.source %}
       <dt>Final URL</dt>        <dd><a href="{{ report.metadata.final_url }}">{{ report.metadata.final_url }}</a></dd>
       {% endif %}
+      <dt>HTTP status</dt>      <dd>{{ report.metadata.http_status if report.metadata.http_status is not none else '—' }}</dd>
       <dt>Pages</dt>            <dd>{{ report.metadata.page_count or '—' }}</dd>
       <dt>Size</dt>             <dd>{{ '%.2f' | format(report.metadata.byte_size_mb) }} MB ({{ '{:,}'.format(report.metadata.byte_size) }} bytes)</dd>
       <dt>Tagged</dt>           <dd>{{ 'yes' if report.metadata.has_tagged_structure else 'no' }}</dd>
