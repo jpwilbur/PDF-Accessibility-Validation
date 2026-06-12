@@ -126,10 +126,8 @@ collection changes.
 **Per-PDF page (`per_pdf.html.j2`).** Add one metadata `<dl>` row, immediately
 after the existing `Final URL` row:
 
-- Network source with status → `<code> reason`, e.g. `200 OK`, `404 Not Found`.
-  Code → reason phrase via a small Jinja filter `http_phrase` (registered in
-  `report/html.py` alongside the existing `grade_class` filter). Unknown code →
-  number only, empty phrase.
+- Network source with status → the bare numeric code, e.g. `200`, `404`. No
+  reason-phrase text (user preference); no `http_phrase` filter is added.
 - The status reflects the *end* of any redirect chain. The existing `Final URL`
   row already communicates that a redirect happened, so no `301 → 200` chain is
   rendered — just the final status.
@@ -201,9 +199,9 @@ saved-report + grid JSON, matching the existing test pattern):
 
 **HTTP status rendering:**
 
-- Per-PDF render with `http_status=200` → status row present; `None` → `—`.
-- Batch render → `Status` column present, badge class matches the code band.
-- `http_phrase` filter: 200→"OK", 404→"Not Found", unknown→"".
+- Per-PDF render with `http_status=200` → status row shows `200`; `None` → `—`.
+- Batch render → `Status` column present, badge class matches the code band
+  (2xx/3xx/4xx5xx/none).
 
 **Gate before commit:** full `pytest`, `ruff check`, and `mypy` on the typed
 modules, matching the existing dev workflow.
