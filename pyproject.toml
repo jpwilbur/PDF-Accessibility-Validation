@@ -72,6 +72,7 @@ select = [
 ignore = [
     "TRY003",  # long exception messages are fine here
     "TRY300",
+    "RUF001",  # × is intentional in string literals
     "RUF002",  # × is intentional in scoring formulas
     "RUF003",  # × is intentional in formula comments
     "RUF012",  # immutable class-level metadata; never mutated
@@ -98,6 +99,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-ra --strict-markers"
 markers = [
     "slow: integration tests that download real PDFs",

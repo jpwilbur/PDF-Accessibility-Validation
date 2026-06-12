@@ -44,6 +44,15 @@ class NetworkConfig:
     follow_redirects: bool = True
     max_bytes: int = 200 * 1024 * 1024  # 200 MB hard cap per file
 
+    chunk_size: int = 10
+    """Download+evaluate PDFs in slices of this size so peak disk stays
+    ~chunk_size × avg PDF instead of the whole batch."""
+
+    delete_cache_after_eval: bool = True
+    """Delete each cached PDF immediately after its evaluation so disk never
+    holds more than one chunk. On by default for both the web app and the CLI.
+    Set False to keep a persistent content cache for deliberate cross-run reuse."""
+
 
 @dataclass
 class Paths:
