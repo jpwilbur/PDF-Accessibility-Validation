@@ -12,6 +12,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from itertools import batched
 from pathlib import Path
 
 from pdf_a11y import __version__
@@ -108,47 +109,52 @@ class Pipeline:
             cache_dir=self.config.paths.cache_dir,
             network=self.config.network,
         )
-        self._emit(
-            ProgressEvent(
-                phase="acquiring",
-                n_total=n_total,
-                n_done=0,
-                n_errored=0,
-                n_critical_failed=0,
-                message="Downloading…",
-            )
-        )
-        acquired = await downloader.acquire_many(sources)
+        cache_dir = self.config.paths.cache_dir
+        delete_after = self.config.network.delete_cache_after_eval
+        chunk_size = self.config.network.chunk_size
+        # itertools.batched requires n >= 1; <= 0 means "one big chunk".
+        batch_n = chunk_size if chunk_size and chunk_size > 0 else max(n_total, 1)
 
         reports: list[PdfReport] = []
         n_errored = 0
         n_critical_failed = 0
-        for src, meta, ap in zip(sources, user_metadata, acquired, strict=True):
-            report = self._evaluate_one(src, ap, meta)
-            reports.append(report)
-            if report.error:
-                n_errored += 1
-            if report.score.critical_fail:
-                n_critical_failed += 1
-            is_error = report.error is not None
+
+        for chunk in batched(range(n_total), batch_n):
             self._emit(
                 ProgressEvent(
-                    phase="evaluating",
+                    phase="acquiring",
                     n_total=n_total,
                     n_done=len(reports),
                     n_errored=n_errored,
                     n_critical_failed=n_critical_failed,
-                    current_source=src,
-                    # Acquisition errors get a synthetic grade of "F" from the
-                    # scoring engine because no checks were applicable.
-                    # That number is meaningless to the user — suppress it
-                    # for the live stream so error URLs don't pollute the
-                    # grade distribution.
-                    last_grade=None if is_error else report.score.grade,
-                    last_score_pct=None if is_error else report.score.score_pct,
-                    last_is_error=is_error,
+                    message="Downloading…",
                 )
             )
+            chunk_sources = [sources[i] for i in chunk]
+            acquired = await downloader.acquire_many(chunk_sources)
+            for i, ap in zip(chunk, acquired, strict=True):
+                report = self._evaluate_one(sources[i], ap, user_metadata[i])
+                reports.append(report)
+                if report.error:
+                    n_errored += 1
+                if report.score.critical_fail:
+                    n_critical_failed += 1
+                is_error = report.error is not None
+                self._emit(
+                    ProgressEvent(
+                        phase="evaluating",
+                        n_total=n_total,
+                        n_done=len(reports),
+                        n_errored=n_errored,
+                        n_critical_failed=n_critical_failed,
+                        current_source=sources[i],
+                        last_grade=None if is_error else report.score.grade,
+                        last_score_pct=None if is_error else report.score.score_pct,
+                        last_is_error=is_error,
+                    )
+                )
+                if delete_after:
+                    self._delete_cached(ap, cache_dir)
 
         _mark_duplicates(reports)
 
