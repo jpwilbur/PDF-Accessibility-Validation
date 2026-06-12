@@ -39,11 +39,16 @@ DEFAULT_TIMEOUT = 60.0
 LINK_URL_COLUMN_ID = "LINK_URL"
 LOG_MESSAGE_COLUMN_ID = "LOG_MESSAGE"
 BROWSER_LOGS_ENTITY = "browser_logs"
-# Non-greedy capture of the first bracketed array after the "PDF Links:" marker.
+# Capture the first bracketed array after the "PDF Links:" marker.
 # Not anchored at end-of-string, so a leading log-level prefix OR a trailing
-# suffix around the array is tolerated. PDF URLs never contain a raw "]" (it
-# would be percent-encoded), so the first "]" reliably closes the array.
-_PDF_LINKS_RE = re.compile(r"PDF Links:\s*(\[.*?\])", re.DOTALL)
+# suffix around the array is tolerated. The body excludes BOTH brackets
+# (`[^][]`) rather than using a lazy `.*?`: PDF URLs never contain a raw "[" or
+# "]" (they'd be percent-encoded), so the array body is bracket-free, and a
+# bracket-free body cannot backtrack. This keeps matching linear even on
+# malformed untrusted console content — a lazy `.*?` (or even `[^\]]*`) is
+# O(n²) on input full of unclosed "PDF Links:[" markers (a ReDoS stall), but
+# `[^][]*` fails fast at each marker. re.DOTALL is now a no-op but harmless.
+_PDF_LINKS_RE = re.compile(r"PDF Links:\s*(\[[^][]*\])", re.DOTALL)
 
 
 class ObservePointError(Exception):

@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import httpx
 import pytest
 
 from pdf_a11y.observepoint import ObservePointFetchResult, fetch_pdf_urls_async
-from pdf_a11y.observepoint.client import _unwrap_safelinks
+from pdf_a11y.observepoint.client import (
+    _extract_browser_log_urls,
+    _unwrap_safelinks,
+)
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -28,6 +32,36 @@ def test_unwrap_safelinks_extracts_inner_url() -> None:
 
 def test_unwrap_safelinks_passthrough_for_normal_urls() -> None:
     assert _unwrap_safelinks("https://example.com/a.pdf") == "https://example.com/a.pdf"
+
+
+def test_extract_browser_log_urls_normal() -> None:
+    """Parity: a well-formed 'PDF Links:[...]' message yields the URLs."""
+    msg = 'PDF Links:["https://example.com/a.pdf","https://example.com/b.pdf"]'
+    assert _extract_browser_log_urls(msg) == [
+        "https://example.com/a.pdf",
+        "https://example.com/b.pdf",
+    ]
+
+
+def test_extract_browser_log_urls_trailing_suffix() -> None:
+    """Parity: a trailing suffix after the closed array is tolerated."""
+    msg = 'PDF Links:["https://example.com/a.pdf"] (2 links found)'
+    assert _extract_browser_log_urls(msg) == ["https://example.com/a.pdf"]
+
+
+def test_extract_browser_log_urls_redos_input_is_bounded() -> None:
+    """Regression: malformed input full of unclosed 'PDF Links:[' markers must
+    not trigger quadratic-time (ReDoS) backtracking.
+
+    With the old lazy `\\[.*?\\]` pattern, this 40k-marker input took minutes;
+    the bracket-excluding `\\[[^][]*\\]` pattern fails fast at each marker.
+    """
+    attack = "PDF Links:[" * 40000  # no closing bracket anywhere
+    start = time.perf_counter()
+    result = _extract_browser_log_urls(attack)
+    elapsed = time.perf_counter() - start
+    assert result == []
+    assert elapsed < 1.0, f"parsing took {elapsed:.3f}s — possible ReDoS regression"
 
 
 # ---------------------------------------------------------------------------
