@@ -142,6 +142,14 @@ column — that's what tells it which PDFs to validate.
 3. Save the grid as a report. Copy the saved-report ID from the URL
    in your browser.
 
+> **Using a console-log report instead.** If ObservePoint isn't resolving your
+> PDFs into the Link URL column, you can instead point the app at a
+> `browser_logs` saved report: run an audit whose on-page action console-logs
+> the PDF links as `PDF Links:["https://…","https://…"]`, then save a report on
+> the **Browser Logs** grid with the **Log Message** column, filtered to rows
+> containing `PDF Links`. Paste that report's ID — the app auto-detects the
+> console-log format and extracts the PDF URLs the same way.
+
 ### Start a validation
 
 In the browser tab the app opened:
