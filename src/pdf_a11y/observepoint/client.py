@@ -39,7 +39,11 @@ DEFAULT_TIMEOUT = 60.0
 LINK_URL_COLUMN_ID = "LINK_URL"
 LOG_MESSAGE_COLUMN_ID = "LOG_MESSAGE"
 BROWSER_LOGS_ENTITY = "browser_logs"
-_PDF_LINKS_RE = re.compile(r"PDF Links:\s*(\[.*\])\s*$", re.DOTALL)
+# Non-greedy capture of the first bracketed array after the "PDF Links:" marker.
+# Not anchored at end-of-string, so a leading log-level prefix OR a trailing
+# suffix around the array is tolerated. PDF URLs never contain a raw "]" (it
+# would be percent-encoded), so the first "]" reliably closes the array.
+_PDF_LINKS_RE = re.compile(r"PDF Links:\s*(\[.*?\])", re.DOTALL)
 
 
 class ObservePointError(Exception):
@@ -55,6 +59,7 @@ class ObservePointFetchResult:
     report_name: str | None = None
     grid_entity_type: str | None = None
     entity_mode: Literal["link", "browser_log"] | None = None
+    """'browser_log' when the report entity is browser_logs; 'link' otherwise."""
     total_rows: int = 0
 
     error: str | None = None
