@@ -5,12 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from pdf_a11y.models import (
+    BatchReport,
     FileMetadata,
     PdfReport,
     Score,
     ToolVersions,
 )
-from pdf_a11y.report import render_pdf_html
+from pdf_a11y.report import render_batch_html, render_pdf_html
 
 _NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 _TOOLS = ToolVersions(pdf_a11y="9.9.9", python="3.12")
@@ -49,4 +50,35 @@ def test_per_pdf_shows_dash_for_missing_status() -> None:
     html = render_pdf_html(_report(http_status=None))
     assert "HTTP status" in html
     # The status row renders an em-dash when there's no network status.
-    assert "—" in html
+    assert ">—<" in html
+
+
+def _batch(reports: list[PdfReport]) -> BatchReport:
+    return BatchReport(
+        started_at=_NOW,
+        finished_at=_NOW,
+        reports=reports,
+        tool_versions=_TOOLS,
+    )
+
+
+def test_batch_has_status_column_header() -> None:
+    batch = _batch([_report(http_status=200)])
+    html = render_batch_html(batch, {("a" * 64): "pdfs/aaa.html"})
+    assert 'data-sort="status"' in html
+    assert ">Status<" in html
+
+
+def test_batch_status_badge_class_by_band() -> None:
+    reports = [
+        _report(http_status=200, sha="2" * 64),
+        _report(http_status=404, sha="4" * 64),
+    ]
+    html = render_batch_html(_batch(reports), {})
+    assert "http-2xx" in html
+    assert "http-4xx5xx" in html
+
+
+def test_batch_status_dash_for_local_source() -> None:
+    html = render_batch_html(_batch([_report(http_status=None, sha="0" * 64)]), {})
+    assert "http-none" in html

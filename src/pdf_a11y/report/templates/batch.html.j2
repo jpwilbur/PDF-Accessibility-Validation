@@ -61,6 +61,7 @@
       <th><button type="button" data-sort="grade">Grade</button></th>
       <th><button type="button" data-sort="score">Score</button></th>
       <th>Document <span class="muted" style="font-weight:400;">— click to open report</span></th>
+      <th><button type="button" data-sort="status">Status</button></th>
       <th><button type="button" data-sort="pages">Pages</button></th>
       <th><button type="button" data-sort="size">Size (MB)</button></th>
       <th>Tagged</th>
@@ -89,6 +90,7 @@
         class="{{ 'errored-row' if r.error else '' }}"
         data-grade="{{ r.score.grade }}"
         data-score="{{ r.score.score_pct }}"
+        data-status="{{ m.http_status or 0 }}"
         data-pages="{{ m.page_count or 0 }}"
         data-size="{{ m.byte_size_mb }}"
         data-modified="{{ m.modification_date or '' }}"
@@ -119,6 +121,17 @@
               · <a href="../export/pdf/{{ m.sha256[:12] }}.pdf" class="pdf-dl">📥 download PDF</a>
             {% endif %}
           </span>
+        </td>
+        <td>
+          {% if m.http_status is none %}
+            <span class="http-badge http-none">—</span>
+          {% elif m.http_status < 300 %}
+            <span class="http-badge http-2xx">{{ m.http_status }}</span>
+          {% elif m.http_status < 400 %}
+            <span class="http-badge http-3xx">{{ m.http_status }}</span>
+          {% else %}
+            <span class="http-badge http-4xx5xx">{{ m.http_status }}</span>
+          {% endif %}
         </td>
         <td>{{ m.page_count or '—' }}</td>
         <td>{{ '%.2f' | format(m.byte_size_mb) }}</td>

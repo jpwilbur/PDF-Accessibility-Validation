@@ -157,6 +157,21 @@ a.pdf-dl {
 }
 a.pdf-dl:hover { border-bottom-color: var(--accent); }
 
+.http-badge {
+  display: inline-block;
+  min-width: 2.4rem;
+  text-align: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.http-2xx     { background: #e2f3e8; color: #1a6f3c; border-color: #b6ddc4; }
+.http-3xx     { background: #fef0d6; color: #7a4a00; border-color: #f1d8a3; }
+.http-4xx5xx  { background: #fde8e8; color: #7a1212; border-color: #f5b5b5; }
+.http-none    { background: #f0f0f0; color: #2c2c2c; border-color: #c8c8c8; }
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
