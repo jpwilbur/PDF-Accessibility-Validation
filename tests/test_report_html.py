@@ -72,10 +72,12 @@ def test_batch_has_status_column_header() -> None:
 def test_batch_status_badge_class_by_band() -> None:
     reports = [
         _report(http_status=200, sha="2" * 64),
+        _report(http_status=301, sha="3" * 64),
         _report(http_status=404, sha="4" * 64),
     ]
     html = render_batch_html(_batch(reports), {})
     assert "http-2xx" in html
+    assert "http-3xx" in html
     assert "http-4xx5xx" in html
 
 
