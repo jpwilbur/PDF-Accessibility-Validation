@@ -284,7 +284,7 @@ def test_browser_logs_extracts_and_dedupes() -> None:
 
 def test_browser_logs_skips_malformed_rows() -> None:
     good = 'PDF Links:["https://oklahoma.gov/ok.pdf"]'
-    bad_json = 'PDF Links:["https://oklahoma.gov/x.pdf"'  # truncated, invalid
+    bad_json = "PDF Links:[not valid json]"  # matches [...] but fails json.loads
     no_match = "Some unrelated console output with no payload"
     not_list = 'PDF Links:{"a":1}'
     routes = {
@@ -330,6 +330,7 @@ def test_browser_logs_missing_log_message_column_hard_fails() -> None:
     assert result.error is not None
     assert "LOG_MESSAGE" in result.error
     assert result.entity_mode == "browser_log"
+    assert result.urls == []
 
 
 def test_browser_logs_zero_urls_returns_diagnosis() -> None:
@@ -352,3 +353,26 @@ def test_browser_logs_zero_urls_returns_diagnosis() -> None:
     assert result.error is not None
     assert "0 PDF URLs" in result.error
     assert result.urls == []
+    assert result.entity_mode == "browser_log"
+    assert result.total_rows == 2  # _browser_log_page with 2 messages → totalCount=2
+
+
+def test_browser_logs_empty_report_no_diagnosis() -> None:
+    """A genuinely empty browser_logs report (0 rows) must NOT trigger the
+    zero-URL diagnosis — it's a clean empty result, not a format problem."""
+    routes = {
+        "/reports/grid/saved/28159": _browser_log_saved(),
+        "/reports/grid/browser-logs": _browser_log_page(
+            [], page=0, total_pages=1
+        ),
+    }
+    transport = _make_handler(routes)
+    client = httpx.AsyncClient(
+        transport=transport, base_url="https://api.observepoint.com"
+    )
+    result = _run(
+        fetch_pdf_urls_async(api_key="t", report_id="28159", client=client)
+    )
+    assert result.error is None, result.error
+    assert result.urls == []
+    assert result.entity_mode == "browser_log"
