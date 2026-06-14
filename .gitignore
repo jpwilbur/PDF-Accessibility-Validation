@@ -25,6 +25,11 @@ Thumbs.db
 *.swp
 *~
 
+# --- Browser-automation artifacts (Playwright/MCP) ----------------------
+# Transient console logs and page snapshots dropped by browser tooling
+# during local testing. Never part of the project.
+.playwright-mcp/
+
 # --- Secrets / credentials (defence in depth) ---------------------------
 # The app stores API keys under ~/Library/Application Support/pdf-a11y/
 # (platformdirs user-data dir) — never inside the repo. These globs
