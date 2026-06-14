@@ -52,3 +52,11 @@ settings.local.json
 # design — but this anchor is a safety net for anyone passing
 # --output-dir ./runs or similar.
 /runs/
+
+# --- Local build/design docs (specs & plans) — not for distribution -----
+# Brainstorm specs and implementation plans are kept locally for the
+# author's reference; they're build scaffolding, not part of the shipped
+# project, so they're never tracked or pushed. (docs/checks.md and
+# docs/standards-mapping.md ARE shipped — only the superpowers subtree is
+# ignored.)
+/docs/superpowers/
