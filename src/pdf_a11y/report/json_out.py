@@ -51,6 +51,7 @@ def write_findings_jsonl(batch: BatchReport, path: Path) -> None:
 _FIXED_COLUMNS: list[tuple[str, str]] = [
     ("PDF URL", "source"),
     ("PDF URL Status", "_http_status"),
+    ("Blocked By Site", "_blocked"),
     ("Final URL", "final_url"),
     ("Unique Hash", "sha256"),
     ("Duplicate PDF", "_is_duplicate"),
@@ -94,8 +95,15 @@ def _row_for(report) -> dict[str, object]:  # type: ignore[no-untyped-def]
         counts[f.severity.value] += 1
     top = ", ".join(f.check_id for f in report.top_findings) or ""
 
+    # A row we never evaluated has no score, grade, or finding counts. Emitting
+    # the scorer's zero-state here would put "F / 0.0" next to every blocked or
+    # missing URL, so anyone filtering or averaging the CSV would count them as
+    # failing documents. Leave those cells empty instead.
+    scored = not report.error
+
     raw: dict[str, object] = {
         "_http_status": m.http_status if m.http_status is not None else "",
+        "_blocked": _bool_str(m.blocked),
         "_is_duplicate": _bool_str(m.is_duplicate),
         "_has_acroform": _bool_str(m.has_acroform),
         "_has_xfa": _bool_str(m.has_xfa),
@@ -106,14 +114,14 @@ def _row_for(report) -> dict[str, object]:  # type: ignore[no-untyped-def]
         "_encrypted": _bool_str(m.encrypted),
         "_encryption_blocks_at": _bool_str(m.encryption_blocks_at),
         "_claims_pdf_ua": _bool_str(m.claims_pdf_ua),
-        "_score_pct": s.score_pct,
-        "_grade": s.grade,
-        "_critical_fail": _bool_str(s.critical_fail),
-        "_critical_fail_reasons": ",".join(s.critical_fail_reasons),
-        "_n_critical": counts["Critical"],
-        "_n_major": counts["Major"],
-        "_n_minor": counts["Minor"],
-        "_n_warning": counts["Warning"],
+        "_score_pct": s.score_pct if scored else "",
+        "_grade": s.grade if scored else "",
+        "_critical_fail": _bool_str(s.critical_fail) if scored else "",
+        "_critical_fail_reasons": ",".join(s.critical_fail_reasons) if scored else "",
+        "_n_critical": counts["Critical"] if scored else "",
+        "_n_major": counts["Major"] if scored else "",
+        "_n_minor": counts["Minor"] if scored else "",
+        "_n_warning": counts["Warning"] if scored else "",
         "_top_issues": top,
     }
     out: dict[str, object] = {}

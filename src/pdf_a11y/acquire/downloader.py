@@ -5,6 +5,10 @@
 - SHA-256 content cache: if we already have bytes whose hash matches, skip re-download.
 - Magic-byte validation: rejects HTML error pages or login redirects.
 - Records HTTP status, content-type, final URL, byte size, and download time.
+- Distinguishes "the site refused us" (403/429/451 and friends → `blocked`)
+  from "the document is missing or broken" (404/410, bad bytes). A blocked row
+  says nothing about the PDF's accessibility, so reports must not read as
+  though the document itself failed.
 """
 
 from __future__ import annotations
@@ -24,6 +28,16 @@ from pdf_a11y.config import NetworkConfig
 
 logger = logging.getLogger(__name__)
 
+BLOCK_STATUSES: frozenset[int] = frozenset({401, 403, 406, 429, 451})
+"""Statuses that mean "the edge refused this request", not "no such document".
+
+401/403 are the common WAF verdicts, 429 is rate limiting, 451 is a legal
+block, and 406 shows up when a bot rule rejects the negotiated content type.
+"""
+
+_ERROR_BODY_PEEK_BYTES = 64 * 1024
+"""Cap on how much of a failed response we read to characterise it."""
+
 
 @dataclass
 class AcquiredPdf:
@@ -41,6 +55,13 @@ class AcquiredPdf:
     from_cache: bool = False
     error: str | None = None
 
+    blocked: bool = False
+    """True when the host refused the request (see BLOCK_STATUSES).
+
+    Kept separate from `error` so reporting can say "we were never allowed to
+    look at this PDF" instead of implying the document is at fault.
+    """
+
 
 class Downloader:
     def __init__(self, cache_dir: Path, network: NetworkConfig):
@@ -50,13 +71,22 @@ class Downloader:
 
     # ----- public API ------------------------------------------------------
 
+    def _client_headers(self) -> dict[str, str]:
+        """Only override the UA when one is configured.
+
+        With user_agent=None httpx sends its own `python-httpx/<ver>`, which is
+        both honest and far less likely to be refused than a bespoke token.
+        """
+        ua = self.network.user_agent
+        return {"User-Agent": ua} if ua else {}
+
     async def acquire_many(self, sources: list[str]) -> list[AcquiredPdf]:
         sem = asyncio.Semaphore(self.network.concurrency)
 
         async with httpx.AsyncClient(
             follow_redirects=self.network.follow_redirects,
             timeout=self.network.timeout_seconds,
-            headers={"User-Agent": self.network.user_agent},
+            headers=self._client_headers(),
         ) as client:
 
             async def _bounded(src: str) -> AcquiredPdf:
@@ -77,7 +107,7 @@ class Downloader:
             client = httpx.AsyncClient(
                 follow_redirects=self.network.follow_redirects,
                 timeout=self.network.timeout_seconds,
-                headers={"User-Agent": self.network.user_agent},
+                headers=self._client_headers(),
             )
         try:
             return await self._acquire_url(source, client)
@@ -120,11 +150,34 @@ class Downloader:
         )
 
     async def _acquire_url(self, url: str, client: httpx.AsyncClient) -> AcquiredPdf:
+        """Fetch, retrying with fallback UAs only if the host refuses us.
+
+        The first pass always uses the client's configured UA. `blocked` results
+        are the only ones worth re-trying with a different identity — a 404 or a
+        malformed PDF will not change.
+        """
+        result = await self._attempt_url(url, client, override_ua=None)
+        for ua in (u for u in self.network.fallback_user_agents if u):
+            if not result.blocked:
+                return result
+            logger.info(
+                "%s blocked (HTTP %s); retrying with fallback UA %r",
+                url,
+                result.http_status,
+                ua,
+            )
+            result = await self._attempt_url(url, client, override_ua=ua)
+        return result
+
+    async def _attempt_url(
+        self, url: str, client: httpx.AsyncClient, *, override_ua: str | None
+    ) -> AcquiredPdf:
         start = time.perf_counter()
         last_err: str | None = None
+        headers = {"User-Agent": override_ua} if override_ua else None
         for attempt in range(1, self.network.retries + 1):
             try:
-                async with client.stream("GET", url) as resp:
+                async with client.stream("GET", url, headers=headers) as resp:
                     final_url = str(resp.url)
                     status = resp.status_code
                     content_type = resp.headers.get("content-type")
@@ -133,6 +186,8 @@ class Downloader:
                         await self._sleep_backoff(attempt)
                         continue
                     if status >= 400:
+                        body = await _peek_body(resp)
+                        message, blocked = _classify_http_failure(status, body)
                         return AcquiredPdf(
                             source=url,
                             local_path=Path(),
@@ -141,7 +196,8 @@ class Downloader:
                             final_url=final_url,
                             http_status=status,
                             content_type=content_type,
-                            error=f"HTTP {status}",
+                            error=message,
+                            blocked=blocked,
                         )
 
                     chunks: list[bytes] = []
@@ -226,3 +282,49 @@ class Downloader:
 
 def _looks_like_url(s: str) -> bool:
     return s.startswith(("http://", "https://"))
+
+
+async def _peek_body(resp: httpx.Response) -> bytes:
+    """Read a bounded slice of a failed response so we can characterise it.
+
+    Block pages are typically a few KB of HTML; we only need enough to tell one
+    from a genuine 404, and we never want to buffer a large error payload.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    try:
+        async for chunk in resp.aiter_bytes():
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= _ERROR_BODY_PEEK_BYTES:
+                break
+    except (httpx.TimeoutException, httpx.TransportError) as e:
+        logger.debug("could not read error body: %s", e)
+    return b"".join(chunks)[:_ERROR_BODY_PEEK_BYTES]
+
+
+def _looks_like_html(body: bytes) -> bool:
+    head = body[:512].lstrip().lower()
+    return head.startswith((b"<!doctype html", b"<html")) or b"<html" in head
+
+
+def _classify_http_failure(status: int, body: bytes) -> tuple[str, bool]:
+    """Map a 4xx onto (human-readable error, blocked).
+
+    The distinction matters for reporting: a blocked URL produces no
+    accessibility verdict at all, and reading it as a failing document
+    understates a site's real score and sends people chasing the wrong problem.
+    """
+    if status in BLOCK_STATUSES:
+        message = (
+            f"HTTP {status} — refused by the site's edge/CDN access policy. "
+            "The PDF was never retrieved, so this is not an accessibility result. "
+            "Set network.user_agent (or --user-agent) for this host, or ask the "
+            "site owner to allow this scanner."
+        )
+        if _looks_like_html(body):
+            message += f" Response was a {len(body)}-byte HTML block page."
+        return message, True
+    if status in (404, 410):
+        return f"HTTP {status} — no document at this URL", False
+    return f"HTTP {status}", False

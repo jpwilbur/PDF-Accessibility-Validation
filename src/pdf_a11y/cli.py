@@ -98,6 +98,17 @@ def evaluate(
         int | None,
         typer.Option("--concurrency", "-c", min=1, max=20, help="Override download concurrency."),
     ] = None,
+    user_agent: Annotated[
+        str | None,
+        typer.Option(
+            "--user-agent",
+            help=(
+                "Override the User-Agent. Defaults to httpx's own, which most hosts "
+                "accept; set this only when a specific host refuses it. Impersonating "
+                "a browser usually makes things worse, not better."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Download, evaluate, and report on a set of PDFs."""
     weights_path = weights or (Path("./weights.yaml") if Path("./weights.yaml").exists() else None)
@@ -106,6 +117,8 @@ def evaluate(
     config.paths.cache_dir = cache_dir
     if concurrency is not None:
         config.network.concurrency = concurrency
+    if user_agent is not None:
+        config.network.user_agent = user_agent
 
     sources: list[str] = []
     user_metadata: list[dict[str, str]] = []
@@ -372,6 +385,18 @@ def _print_summary(batch: BatchReport) -> None:
         title = r.metadata.title or r.metadata.source
         if len(title) > 60:
             title = title[:57] + "…"
+
+        # A URL we never retrieved has no grade. Printing "F / 0.0" for it
+        # reads as a document that failed its accessibility checks, which is
+        # both wrong and the thing that made these runs look worthless.
+        if r.error:
+            if r.metadata.blocked:
+                note = f"[yellow]BLOCKED (HTTP {r.metadata.http_status})[/yellow]"
+            else:
+                note = "[dim]not retrieved[/dim]"
+            table.add_row("[dim]—[/dim]", "[dim]—[/dim]", title, "—", "—", "—", note)
+            continue
+
         table.add_row(
             r.score.grade,
             f"{r.score.score_pct:.1f}",
@@ -382,3 +407,12 @@ def _print_summary(batch: BatchReport) -> None:
             top,
         )
     console.print(table)
+
+    if batch.blocked:
+        console.print(
+            f"\n[yellow]{batch.blocked} of {batch.total} URL(s) were refused by the host"
+            "[/yellow] (HTTP 403/429/451 — see the 'Blocked By Site' column). Those PDFs "
+            "were never retrieved, so they carry no accessibility result and are not "
+            "failing documents. Try --user-agent, or ask the site owner to allow this "
+            "scanner."
+        )

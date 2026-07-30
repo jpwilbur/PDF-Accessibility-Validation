@@ -40,7 +40,35 @@ class NetworkConfig:
     timeout_seconds: float = 60.0
     retries: int = 3
     backoff_base_seconds: float = 1.5
-    user_agent: str = "pdf-a11y/0.1 (+accessibility-evaluator; polite-bot; contact your site admin)"
+
+    user_agent: str | None = None
+    """UA string to send, or None to let httpx send its own (`python-httpx/<ver>`).
+
+    Deliberately None. A bespoke token here is a liability: some CDN/WAF setups
+    allow a known set of HTTP-client UAs and 403 everything they don't
+    recognise. mass.gov does exactly that. The previous default here —
+    "pdf-a11y/0.1 (+accessibility-evaluator; polite-bot; contact your site
+    admin)" — returned 403 on every PDF we requested, both /files/*.pdf and
+    /doc/*/download; the stock httpx UA returned 200 on all of them. Even the
+    bare token "pdf-a11y/0.1" was enough to trip it.
+
+    Note that impersonating a browser is *worse*, not better: a lone Chrome or
+    Firefox UA is also 403 there, because a browser UA arriving without the
+    matching browser header set (Accept, Accept-Language, sec-ch-ua,
+    Sec-Fetch-*) reads as a spoofed browser. Leave this None unless a specific
+    host requires otherwise, and prefer asking the site owner to allow our
+    traffic over guessing at a string that slips through.
+    """
+
+    fallback_user_agents: list[str] = field(default_factory=list)
+    """UAs to retry with, in order, when a response looks edge-blocked.
+
+    Ships empty on purpose. Rotating identities to get past a WAF is evasion,
+    and the right fix for a blocked host is to talk to whoever runs it. This
+    exists so an operator with permission to scan a host can work around a
+    misconfigured rule without editing code.
+    """
+
     follow_redirects: bool = True
     max_bytes: int = 200 * 1024 * 1024  # 200 MB hard cap per file
 

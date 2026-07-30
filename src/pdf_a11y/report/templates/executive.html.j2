@@ -31,7 +31,7 @@
   </div>
   <div class="exec-stat success">
     <div class="lbl">PDFs evaluated</div>
-    <div class="val">{{ batch.total - batch.errored }}</div>
+    <div class="val">{{ batch.evaluated }}</div>
     <div class="sub">URLs that returned a valid PDF</div>
   </div>
   <div class="exec-stat danger">
@@ -41,9 +41,16 @@
   </div>
   <div class="exec-stat warn">
     <div class="lbl">Non-PDF URLs</div>
-    <div class="val">{{ batch.errored }}</div>
+    <div class="val">{{ batch.errored - batch.blocked }}</div>
     <div class="sub">404, redirect, HTML, timeout — skipped</div>
   </div>
+  {% if batch.blocked > 0 %}
+  <div class="exec-stat warn">
+    <div class="lbl">Blocked by site</div>
+    <div class="val">{{ batch.blocked }}</div>
+    <div class="sub">HTTP 403/429/451 — never retrieved, no verdict</div>
+  </div>
+  {% endif %}
 </div>
 
 <h2>Grade distribution</h2>

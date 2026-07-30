@@ -157,13 +157,20 @@ def _render_comprehensive_with_inline(batch: BatchReport) -> str:
     chunks: list[str] = [_render_executive_html(batch)]
 
     valid = [r for r in batch.reports if not r.error]
-    errored = [r for r in batch.reports if r.error]
+    # Blocked URLs are called out separately: the host refused us, so unlike a
+    # 404 or a malformed file it says nothing about the document itself.
+    blocked = [r for r in batch.reports if r.error and r.metadata.blocked]
+    errored = [r for r in batch.reports if r.error and not r.metadata.blocked]
 
     chunks.append('<h2 class="page-break-before">All evaluated documents</h2>')
-    chunks.append(
-        f'<p class="muted" style="font-size:0.85em;">{len(valid)} PDFs evaluated; '
-        f'{len(errored)} non-PDF URLs are listed at the end.</p>'
-    )
+    tail_note = f"{len(valid)} PDFs evaluated"
+    if errored:
+        tail_note += f"; {len(errored)} non-PDF URLs"
+    if blocked:
+        tail_note += f"; {len(blocked)} URLs blocked by the host"
+    if errored or blocked:
+        tail_note += " (listed at the end)"
+    chunks.append(f'<p class="muted" style="font-size:0.85em;">{tail_note}.</p>')
     for i, r in enumerate(valid, start=1):
         title = _html_escape(r.metadata.title or r.metadata.source)
         chunks.append(
@@ -172,6 +179,31 @@ def _render_comprehensive_with_inline(batch: BatchReport) -> str:
             + _render_per_pdf_inline_html(r)
             + "</section>"
         )
+
+    if blocked:
+        chunks.append('<section class="page-break-before">')
+        chunks.append(f"<h2>URLs blocked by the site ({len(blocked)})</h2>")
+        chunks.append(
+            "<p class=\"muted\">The host refused these requests (HTTP 403/429/451), so "
+            "the documents were never retrieved. This is a site access-policy outcome, "
+            "<strong>not</strong> an accessibility finding — these PDFs may well be "
+            "conformant. They are excluded from the grade distribution and from all "
+            "scoring. To cover them, re-run with a User-Agent the host accepts, or ask "
+            "the site owner to allow this scanner.</p>"
+        )
+        chunks.append(
+            '<table class="no-break-inside"><thead><tr>'
+            "<th>URL</th><th>Status</th></tr></thead><tbody>"
+        )
+        for r in blocked:
+            src = _html_escape(r.metadata.source or "")
+            chunks.append(
+                "<tr>"
+                f'<td><span class="muted" style="font-size:0.82em;">{src}</span></td>'
+                f'<td style="font-size:0.82em;">HTTP {r.metadata.http_status or "—"}</td>'
+                "</tr>"
+            )
+        chunks.append("</tbody></table></section>")
 
     if errored:
         chunks.append('<section class="page-break-before">')

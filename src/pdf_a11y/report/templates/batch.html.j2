@@ -11,9 +11,10 @@
 <header class="banner">
   <h1>Batch accessibility report</h1>
   <div class="row">
-    <div><strong>{{ batch.total - batch.errored }}</strong> evaluated</div>
+    <div><strong>{{ batch.evaluated }}</strong> evaluated</div>
     <div><strong>{{ batch.critical_failed }}</strong> critical failures</div>
-    <div><strong>{{ batch.errored }}</strong> non-PDF / errors <span class="muted">(hidden by default)</span></div>
+    {% if batch.blocked > 0 %}<div><strong>{{ batch.blocked }}</strong> blocked by site <span class="muted">(no verdict)</span></div>{% endif %}
+    <div><strong>{{ batch.errored - batch.blocked }}</strong> non-PDF / errors <span class="muted">(hidden by default)</span></div>
     <div class="score-meta">{{ batch.started_at.isoformat(timespec='seconds') }} → {{ batch.finished_at.isoformat(timespec='seconds') }}</div>
   </div>
 </header>
@@ -21,9 +22,17 @@
 <main>
 
 {% if batch.errored > 0 %}
+{% set other_errors = batch.errored - batch.blocked %}
 <div id="errorBanner" style="background:#FEF3C7; border:1px solid #FDE68A; border-left:6px solid #B45309; border-radius:6px; padding:0.75rem 1rem; margin:0 0 1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-  <span style="font-weight:600; color:#78350F;">⚠ {{ batch.errored }} URL{{ '' if batch.errored == 1 else 's' }} did not return a valid PDF</span>
-  <span class="muted" style="flex:1; min-width:200px;">These rows are hidden by default. They were unreachable, returned non-PDF content (HTML pages, login redirects), or had HTTP errors.</span>
+  {% if batch.blocked > 0 %}
+  <span style="font-weight:600; color:#78350F;">⚠ {{ batch.blocked }} URL{{ '' if batch.blocked == 1 else 's' }} blocked by the site (HTTP 403/429/451)</span>
+  <span class="muted" style="flex:1; min-width:200px;">The host refused these requests, so those PDFs were never retrieved. That is a site access-policy outcome, <strong>not</strong> an accessibility result — they may well be conformant. Re-run with a User-Agent the host accepts, or ask the site owner to allow this scanner.</span>
+  {% endif %}
+  {% if other_errors > 0 %}
+  <span style="font-weight:600; color:#78350F;">⚠ {{ other_errors }} URL{{ '' if other_errors == 1 else 's' }} did not return a valid PDF</span>
+  <span class="muted" style="flex:1; min-width:200px;">Unreachable, non-PDF content (HTML pages, login redirects), or HTTP errors.</span>
+  {% endif %}
+  <span class="muted" style="min-width:180px;">These rows are hidden by default.</span>
   <label style="margin:0;"><input type="checkbox" id="showErrorsToggle"> Show error rows</label>
 </div>
 {% endif %}
@@ -103,8 +112,15 @@
         data-form="{{ '1' if m.has_fillable_form else '0' }}"
         data-haystack="{{ ((m.title or '') + ' ' + m.source + ' ' + (m.producer or '') + ' ' + (r.findings | map(attribute='check_id') | list | join(' '))) | lower }}"
       >
+        {# A URL we never retrieved has no grade. Showing "F / 0.0" would read as
+           a document that failed its checks rather than one we never saw. #}
+        {% if r.error %}
+        <td><span class="muted" title="{{ 'Blocked by the site — never retrieved' if m.blocked else 'Not retrieved' }}">—</span></td>
+        <td><span class="muted">{{ 'blocked' if m.blocked else '—' }}</span></td>
+        {% else %}
         <td><span class="grade {{ r.score.grade | grade_class }}" style="width:2rem;height:2rem;font-size:1rem">{{ r.score.grade }}</span></td>
         <td>{{ '%.1f' | format(r.score.score_pct) }}</td>
+        {% endif %}
         <td>
           {% if row.link and not r.error %}
             <a class="doc-link" href="{{ row.link }}">

@@ -201,6 +201,7 @@ class Pipeline:
                 http_status=ap.http_status,
                 content_type=ap.content_type,
                 download_ms=ap.download_ms,
+                blocked=ap.blocked,
             )
             score = compute_score([], self.config)
             return PdfReport(
@@ -213,7 +214,10 @@ class Pipeline:
                 started_at=started,
                 finished_at=datetime.now(UTC),
                 duration_ms=(time.perf_counter() - t0) * 1000.0,
-                error=f"acquisition failed: {ap.error}",
+                # A blocked URL isn't an acquisition bug on our side, and the
+                # message already explains itself — don't bury it under a prefix
+                # that reads like the document was at fault.
+                error=ap.error if ap.blocked else f"acquisition failed: {ap.error}",
             )
 
         with PdfContext(
@@ -286,6 +290,7 @@ class Pipeline:
             http_status=ap.http_status,
             content_type=ap.content_type,
             download_ms=ap.download_ms,
+            blocked=ap.blocked,
             page_count=ctx.page_count,
             pdf_version=ctx.pdf_version,
             title=ctx.title,

@@ -108,6 +108,16 @@ class FileMetadata(BaseModel):
     content_type: str | None = None
     download_ms: float | None = None
 
+    blocked: bool = Field(
+        False,
+        description=(
+            "True if the host refused the request (403/429/451 and similar) so the "
+            "PDF was never retrieved. Distinct from a missing or malformed document: "
+            "a blocked URL has no accessibility verdict and should not be read as a "
+            "failing one."
+        ),
+    )
+
     page_count: int | None = None
     pdf_version: str | None = None
     title: str | None = None
@@ -218,6 +228,16 @@ class BatchReport(BaseModel):
     @property
     def errored(self) -> int:
         return sum(1 for r in self.reports if r.error)
+
+    @property
+    def blocked(self) -> int:
+        """URLs the site refused, so they carry no accessibility verdict."""
+        return sum(1 for r in self.reports if r.metadata.blocked)
+
+    @property
+    def evaluated(self) -> int:
+        """Rows that actually produced an accessibility result."""
+        return sum(1 for r in self.reports if not r.error)
 
     @property
     def critical_failed(self) -> int:
